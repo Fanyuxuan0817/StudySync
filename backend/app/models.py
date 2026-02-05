@@ -89,6 +89,7 @@ class Group(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     members = relationship("GroupMember", back_populates="group", cascade="all, delete-orphan")
+    chat_room = relationship("ChatRoom", back_populates="group", uselist=False)
 
 
 class GroupMember(Base):

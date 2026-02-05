@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
-from app.models import User, Plan, Checkin
+from app.models import User, Plan, Checkin, GroupMember
 from app.schemas import CheckinCreate, CheckinResponse, CheckinsListResponse, TodayCheckinResponse, CheckinStatsResponse, DailyStats, ResponseModel
 from app.auth import get_current_user
 from datetime import date, timedelta
@@ -52,6 +52,12 @@ async def create_checkin(
     db.add(new_checkin)
     db.commit()
     db.refresh(new_checkin)
+    
+    # 更新用户在所有群组中的最后打卡日期
+    user_groups = db.query(GroupMember).filter(GroupMember.user_id == current_user.id).all()
+    for group_member in user_groups:
+        group_member.last_checkin = checkin_date
+    db.commit()
     
     return ResponseModel(
         data={
@@ -278,6 +284,12 @@ async def update_checkin(
     
     db.commit()
     db.refresh(checkin)
+    
+    # 更新用户在所有群组中的最后打卡日期
+    user_groups = db.query(GroupMember).filter(GroupMember.user_id == current_user.id).all()
+    for group_member in user_groups:
+        group_member.last_checkin = checkin_date
+    db.commit()
     
     return ResponseModel(
         data={

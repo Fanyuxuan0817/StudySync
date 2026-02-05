@@ -1,0 +1,560 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+from app.database import get_db
+from app.models import User, Group
+from app.chat_models import ChatRoom, ChatRoomMember, ChatRoomJoinRequest, ChatRoomStatus, ChatRoomJoinStatus
+from app.chat_schemas import (
+    ChatRoomCreate, ChatRoomUpdate, ChatRoomResponse, ChatRoomSearchResponse,
+    ChatRoomJoinRequestCreate, ChatRoomJoinRequestResponse, ChatRoomJoinRequestReview,
+    ChatRoomMembersResponse, ChatRoomMemberResponse, ChatIdSearchRequest, ChatRoomBriefResponse
+)
+from app.chat_id_generator import ChatIdGenerator
+from app.auth import get_current_user
+from typing import Optional, List
+
+router = APIRouter(prefix="/chat-rooms", tags=["群聊"])
+
+
+@router.post("", response_model=ChatRoomResponse)
+async def create_chat_room(
+    chat_room_data: ChatRoomCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    创建群聊房间
+    
+    功能：
+    1. 自动生成唯一群聊ID
+    2. 可关联现有学习群组
+    3. 创建者自动成为群主
+    """
+    # 验证群聊名称
+    if not chat_room_data.name or len(chat_room_data.name.strip()) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="群聊名称不能为空"
+        )
+    
+    # 如果关联了学习群组，验证群组存在且用户是成员
+    if chat_room_data.group_id:
+        group = db.query(Group).filter(Group.id == chat_room_data.group_id).first()
+        if not group:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="关联的学习群组不存在"
+            )
+        
+        # 检查用户是否是群组成员
+        from app.models import GroupMember
+        is_group_member = db.query(GroupMember).filter(
+            GroupMember.group_id == chat_room_data.group_id,
+            GroupMember.user_id == current_user.id
+        ).first()
+        
+        if not is_group_member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有学习群组成员才能创建关联的群聊"
+            )
+    
+    # 生成唯一群聊ID
+    chat_id = ChatIdGenerator.generate_unique(db)
+    if not chat_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="无法生成唯一群聊ID，请稍后重试"
+        )
+    
+    # 创建群聊
+    new_chat_room = ChatRoom(
+        chat_id=chat_id,
+        name=chat_room_data.name.strip(),
+        description=chat_room_data.description,
+        avatar_url=chat_room_data.avatar_url,
+        group_id=chat_room_data.group_id,
+        created_by=current_user.id,
+        max_members=chat_room_data.max_members,
+        is_public=chat_room_data.is_public
+    )
+    db.add(new_chat_room)
+    db.commit()
+    db.refresh(new_chat_room)
+    
+    # 创建群主成员记录
+    owner_member = ChatRoomMember(
+        chat_room_id=new_chat_room.id,
+        user_id=current_user.id,
+        role="owner",
+        last_active_at=func.now()
+    )
+    db.add(owner_member)
+    db.commit()
+    
+    return ChatRoomResponse(
+        chat_room_id=new_chat_room.id,
+        chat_id=new_chat_room.chat_id,
+        name=new_chat_room.name,
+        description=new_chat_room.description,
+        avatar_url=new_chat_room.avatar_url,
+        group_id=new_chat_room.group_id,
+        creator_id=new_chat_room.created_by,
+        max_members=new_chat_room.max_members,
+        current_members=1,
+        is_public=new_chat_room.is_public,
+        status=new_chat_room.status,
+        created_at=new_chat_room.created_at
+    )
+
+
+@router.get("/search", response_model=ChatRoomSearchResponse)
+async def search_chat_rooms(
+    keyword: Optional[str] = Query(None, description="搜索关键词"),
+    chat_id: Optional[str] = Query(None, description="群聊ID"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    搜索群聊
+    
+    支持：
+    1. 按群聊ID精确搜索
+    2. 按名称模糊搜索
+    3. 只显示公开群聊或已加入的群聊
+    """
+    query = db.query(ChatRoom).filter(ChatRoom.status == ChatRoomStatus.ACTIVE)
+    
+    # 如果提供了群聊ID，进行精确匹配
+    if chat_id:
+        if not ChatIdGenerator.is_valid(chat_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="群聊ID格式无效"
+            )
+        query = query.filter(ChatRoom.chat_id == chat_id.upper())
+    
+    # 如果提供了关键词，进行模糊搜索
+    if keyword:
+        query = query.filter(
+            or_(
+                ChatRoom.name.contains(keyword.strip()),
+                ChatRoom.description.contains(keyword.strip())
+            )
+        )
+    
+    # 只显示公开群聊或用户已加入的群聊
+    user_chat_ids = db.query(ChatRoomMember.chat_room_id).filter(
+        ChatRoomMember.user_id == current_user.id
+    ).subquery()
+    
+    query = query.filter(
+        or_(
+            ChatRoom.is_public == True,
+            ChatRoom.id.in_(user_chat_ids)
+        )
+    )
+    
+    # 统计总数
+    total = query.count()
+    
+    # 分页
+    offset = (page - 1) * page_size
+    chat_rooms = query.offset(offset).limit(page_size).all()
+    
+    # 构建响应数据
+    chat_rooms_data = []
+    for room in chat_rooms:
+        # 获取当前成员数
+        current_members = db.query(ChatRoomMember).filter(
+            ChatRoomMember.chat_room_id == room.id
+        ).count()
+        
+        chat_rooms_data.append(ChatRoomResponse(
+            chat_room_id=room.id,
+            chat_id=room.chat_id,
+            name=room.name,
+            description=room.description,
+            avatar_url=room.avatar_url,
+            group_id=room.group_id,
+            creator_id=room.created_by,
+            max_members=room.max_members,
+            current_members=current_members,
+            is_public=room.is_public,
+            status=room.status,
+            created_at=room.created_at
+        ))
+    
+    return ChatRoomSearchResponse(
+        chat_rooms=chat_rooms_data,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
+
+
+@router.get("/search-by-id", response_model=ChatRoomBriefResponse)
+async def search_chat_room_by_id(
+    chat_id_search: ChatIdSearchRequest = Depends(),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    通过群聊ID搜索群聊（精确匹配）
+    
+    用于加入群聊时的快速搜索
+    """
+    # 验证群聊ID格式
+    if not ChatIdGenerator.is_valid(chat_id_search.chat_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="群聊ID格式无效"
+        )
+    
+    # 搜索群聊
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.chat_id == chat_id_search.chat_id.upper(),
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在"
+        )
+    
+    # 检查是否是公开群聊或用户已加入
+    is_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room.id,
+        ChatRoomMember.user_id == current_user.id
+    ).first()
+    
+    if not chat_room.is_public and not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="该群聊不对外开放"
+        )
+    
+    # 获取当前成员数
+    current_members = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room.id
+    ).count()
+    
+    return ChatRoomBriefResponse(
+        chat_room_id=chat_room.id,
+        chat_id=chat_room.chat_id,
+        name=chat_room.name,
+        description=chat_room.description,
+        avatar_url=chat_room.avatar_url,
+        current_members=current_members,
+        max_members=chat_room.max_members,
+        is_public=chat_room.is_public
+    )
+
+
+@router.post("/{chat_room_id}/join-request", response_model=ChatRoomJoinRequestResponse)
+async def create_join_request(
+    chat_room_id: int,
+    request_data: ChatRoomJoinRequestCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    发送加入群聊请求
+    """
+    # 验证群聊存在且活跃
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.id == chat_room_id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在或已关闭"
+        )
+    
+    # 检查是否已加入
+    existing_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id
+    ).first()
+    
+    if existing_member:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="您已在该群聊中"
+        )
+    
+    # 检查是否已有待处理的申请
+    existing_request = db.query(ChatRoomJoinRequest).filter(
+        ChatRoomJoinRequest.chat_room_id == chat_room_id,
+        ChatRoomJoinRequest.user_id == current_user.id,
+        ChatRoomJoinRequest.status == ChatRoomJoinStatus.PENDING
+    ).first()
+    
+    if existing_request:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="您已发送过加入请求，请等待审批"
+        )
+    
+    # 检查群聊是否已满
+    current_members = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id
+    ).count()
+    
+    if current_members >= chat_room.max_members:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="群聊成员已满"
+        )
+    
+    # 创建加入请求
+    join_request = ChatRoomJoinRequest(
+        chat_room_id=chat_room_id,
+        user_id=current_user.id,
+        message=request_data.message,
+        status=ChatRoomJoinStatus.PENDING
+    )
+    db.add(join_request)
+    db.commit()
+    db.refresh(join_request)
+    
+    return ChatRoomJoinRequestResponse(
+        request_id=join_request.id,
+        chat_room_id=join_request.chat_room_id,
+        chat_id=chat_room.chat_id,
+        chat_room_name=chat_room.name,
+        user_id=join_request.user_id,
+        username=current_user.username,
+        status=join_request.status,
+        message=join_request.message,
+        reviewed_by=join_request.reviewed_by,
+        reviewer_name=None,
+        review_message=join_request.review_message,
+        created_at=join_request.created_at,
+        reviewed_at=join_request.reviewed_at
+    )
+
+
+@router.get("/{chat_room_id}/join-requests", response_model=List[ChatRoomJoinRequestResponse])
+async def get_join_requests(
+    chat_room_id: int,
+    status_filter: Optional[ChatRoomJoinStatus] = Query(None, description="筛选状态"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取群聊加入请求列表（管理员/群主权限）
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(ChatRoom.id == chat_room_id).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在"
+        )
+    
+    # 验证用户权限（管理员或群主）
+    member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id,
+        ChatRoomMember.role.in_(["owner", "admin"])
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主或管理员才能查看加入请求"
+        )
+    
+    # 查询加入请求
+    query = db.query(ChatRoomJoinRequest, User).join(
+        User, ChatRoomJoinRequest.user_id == User.id
+    ).filter(ChatRoomJoinRequest.chat_room_id == chat_room_id)
+    
+    if status_filter:
+        query = query.filter(ChatRoomJoinRequest.status == status_filter)
+    
+    query = query.order_by(ChatRoomJoinRequest.created_at.desc())
+    
+    requests_data = []
+    for request, user in query.all():
+        reviewer_name = None
+        if request.reviewed_by:
+            reviewer = db.query(User).filter(User.id == request.reviewed_by).first()
+            reviewer_name = reviewer.username if reviewer else None
+        
+        requests_data.append(ChatRoomJoinRequestResponse(
+            request_id=request.id,
+            chat_room_id=request.chat_room_id,
+            chat_id=chat_room.chat_id,
+            chat_room_name=chat_room.name,
+            user_id=request.user_id,
+            username=user.username,
+            status=request.status,
+            message=request.message,
+            reviewed_by=request.reviewed_by,
+            reviewer_name=reviewer_name,
+            review_message=request.review_message,
+            created_at=request.created_at,
+            reviewed_at=request.reviewed_at
+        ))
+    
+    return requests_data
+
+
+@router.post("/{chat_room_id}/join-requests/{request_id}/review", response_model=ChatRoomJoinRequestResponse)
+async def review_join_request(
+    chat_room_id: int,
+    request_id: int,
+    review_data: ChatRoomJoinRequestReview,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    审批加入请求（管理员/群主权限）
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(ChatRoom.id == chat_room_id).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在"
+        )
+    
+    # 验证用户权限（管理员或群主）
+    member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id,
+        ChatRoomMember.role.in_(["owner", "admin"])
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主或管理员才能审批加入请求"
+        )
+    
+    # 获取加入请求
+    join_request = db.query(ChatRoomJoinRequest).filter(
+        ChatRoomJoinRequest.id == request_id,
+        ChatRoomJoinRequest.chat_room_id == chat_room_id,
+        ChatRoomJoinRequest.status == ChatRoomJoinStatus.PENDING
+    ).first()
+    
+    if not join_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="加入请求不存在或已处理"
+        )
+    
+    # 检查群聊是否已满（只在批准时检查）
+    if review_data.approve:
+        current_members = db.query(ChatRoomMember).filter(
+            ChatRoomMember.chat_room_id == chat_room_id
+        ).count()
+        
+        if current_members >= chat_room.max_members:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="群聊成员已满"
+            )
+    
+    # 更新请求状态
+    join_request.status = ChatRoomJoinStatus.APPROVED if review_data.approve else ChatRoomJoinStatus.REJECTED
+    join_request.reviewed_by = current_user.id
+    join_request.reviewed_at = func.now()
+    join_request.review_message = review_data.review_message
+    
+    # 如果批准，添加成员
+    if review_data.approve:
+        new_member = ChatRoomMember(
+            chat_room_id=chat_room_id,
+            user_id=join_request.user_id,
+            role="member",
+            last_active_at=func.now()
+        )
+        db.add(new_member)
+    
+    db.commit()
+    db.refresh(join_request)
+    
+    # 获取用户信息
+    user = db.query(User).filter(User.id == join_request.user_id).first()
+    
+    return ChatRoomJoinRequestResponse(
+        request_id=join_request.id,
+        chat_room_id=join_request.chat_room_id,
+        chat_id=chat_room.chat_id,
+        chat_room_name=chat_room.name,
+        user_id=join_request.user_id,
+        username=user.username if user else "未知用户",
+        status=join_request.status,
+        message=join_request.message,
+        reviewed_by=join_request.reviewed_by,
+        reviewer_name=current_user.username,
+        review_message=join_request.review_message,
+        created_at=join_request.created_at,
+        reviewed_at=join_request.reviewed_at
+    )
+
+
+@router.get("/{chat_room_id}/members", response_model=ChatRoomMembersResponse)
+async def get_chat_room_members(
+    chat_room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取群聊成员列表
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(ChatRoom.id == chat_room_id).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在"
+        )
+    
+    # 检查用户是否是群聊成员
+    is_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id
+    ).first()
+    
+    if not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群聊成员才能查看成员列表"
+        )
+    
+    # 获取成员列表
+    members_query = db.query(ChatRoomMember, User).join(
+        User, ChatRoomMember.user_id == User.id
+    ).filter(ChatRoomMember.chat_room_id == chat_room_id)
+    
+    members = members_query.all()
+    
+    members_data = []
+    for member, user in members:
+        members_data.append(ChatRoomMemberResponse(
+            user_id=user.id,
+            username=user.username,
+            avatar_url=user.avatar_url,
+            role=member.role,
+            joined_at=member.joined_at,
+            last_active_at=member.last_active_at,
+            is_muted=member.is_muted
+        ))
+    
+    return ChatRoomMembersResponse(
+        chat_room_id=chat_room_id,
+        chat_id=chat_room.chat_id,
+        name=chat_room.name,
+        total_members=len(members_data),
+        members=members_data
+    )

@@ -64,7 +64,18 @@ const api = {
     leaveGroup: (id) => apiClient.post(`/groups/${id}/leave`),
     getGroupMembers: (id, params) => apiClient.get(`/groups/${id}/members`, { params }),
     removeMember: (groupId, userId) => apiClient.delete(`/groups/${groupId}/members/${userId}`),
-    getGroupCheckins: (id, params) => apiClient.get(`/groups/${id}/checkins`, { params })
+    getGroupCheckins: (id, params) => apiClient.get(`/groups/${id}/checkins`, { params }),
+    getGroupStats: (id) => apiClient.get(`/groups/${id}/stats`)
+  },
+  chatRooms: {
+    // 群聊相关API
+    createChatRoom: (data) => apiClient.post('/chat-rooms', data),
+    searchChatRooms: (params) => apiClient.get('/chat-rooms/search', { params }),
+    searchByChatId: (chatId) => apiClient.get('/chat-rooms/search-by-id', { params: { chat_id: chatId } }),
+    getChatRoomMembers: (id) => apiClient.get(`/chat-rooms/${id}/members`),
+    createJoinRequest: (chatRoomId, data) => apiClient.post(`/chat-rooms/${chatRoomId}/join-request`, data),
+    getJoinRequests: (chatRoomId, params) => apiClient.get(`/chat-rooms/${chatRoomId}/join-requests`, { params }),
+    reviewJoinRequest: (chatRoomId, requestId, data) => apiClient.post(`/chat-rooms/${chatRoomId}/join-requests/${requestId}/review`, data)
   },
   ai: {
     getWeeklyReport: (params) => apiClient.get('/ai/weekly_report', { params }),

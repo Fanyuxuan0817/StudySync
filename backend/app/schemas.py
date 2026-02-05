@@ -159,8 +159,17 @@ class CheckinStatsResponse(BaseModel):
 class GroupCreate(BaseModel):
     name: str = Field(..., max_length=100)
     description: Optional[str] = None
-    daily_checkin_rule: dict = Field(default={"min_checkins_per_day": 1})
-    auto_remove_days: int = 3
+    daily_checkin_required: bool = Field(default=True)
+
+
+class GroupTransferRequest(BaseModel):
+    new_owner_id: int = Field(..., description="新群主的用户ID")
+
+
+class GroupUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, max_length=100, description="群组名称")
+    description: Optional[str] = Field(None, description="群组描述")
+    daily_checkin_required: Optional[bool] = Field(None, description="是否要求每日打卡")
 
 
 class GroupResponse(BaseModel):

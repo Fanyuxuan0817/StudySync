@@ -19,15 +19,15 @@
               <h3 class="section-title">我创建的群组</h3>
               <el-grid :column="3" :gutter="20">
                 <el-grid-item v-for="group in groups.created" :key="group.group_id">
-                  <el-card :body-style="{ padding: '15px' }" class="group-card">
+                  <el-card :body-style="{ padding: '15px' }" class="group-card" @click="viewGroupDetail(group.group_id)">
                     <h4 class="group-name">{{ group.name }}</h4>
                     <p class="group-description">{{ group.description || '暂无描述' }}</p>
                     <p class="group-members">成员: {{ group.member_count }} 人</p>
                     <div class="group-actions">
-                      <el-button size="small" @click="viewGroupMembers(group.group_id)">
+                      <el-button size="small" @click.stop="viewGroupMembers(group.group_id)">
                         查看成员
                       </el-button>
-                      <el-button size="small" type="primary" @click="viewGroupCheckins(group.group_id)">
+                      <el-button size="small" type="primary" @click.stop="goToGroupChat(group.group_id, group.name)">
                         查看打卡
                       </el-button>
                     </div>
@@ -41,16 +41,16 @@
               <h3 class="section-title">我加入的群组</h3>
               <el-grid :column="3" :gutter="20">
                 <el-grid-item v-for="group in groups.joined" :key="group.group_id">
-                  <el-card :body-style="{ padding: '15px' }" class="group-card">
+                  <el-card :body-style="{ padding: '15px' }" class="group-card" @click="viewGroupDetail(group.group_id)">
                     <h4 class="group-name">{{ group.name }}</h4>
                     <p class="group-description">{{ group.description || '暂无描述' }}</p>
                     <p class="group-members">成员: {{ group.member_count }} 人</p>
                     <p class="group-joined">加入时间: {{ group.joined_at }}</p>
                     <div class="group-actions">
-                      <el-button size="small" @click="viewGroupMembers(group.group_id)">
+                      <el-button size="small" @click.stop="viewGroupMembers(group.group_id)">
                         查看成员
                       </el-button>
-                      <el-button size="small" type="primary" @click="viewGroupCheckins(group.group_id)">
+                      <el-button size="small" type="primary" @click.stop="goToGroupChat(group.group_id, group.name)">
                         查看打卡
                       </el-button>
                     </div>
@@ -156,12 +156,14 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../store/modules/auth'
 import { useUserStore } from '../store/modules/user'
 import api from '../api'
 
 const authStore = useAuthStore()
 const userStore = useUserStore()
+const router = useRouter()
 const createGroupDialogVisible = ref(false)
 const groupFormRef = ref(null)
 const selectedGroupId = ref(null)
@@ -195,6 +197,10 @@ const showCreateGroupDialog = () => {
   createGroupDialogVisible.value = true
 }
 
+const viewGroupDetail = (groupId) => {
+  router.push(`/groups/${groupId}`)
+}
+
 const handleCreateGroup = async () => {
   if (!groupFormRef.value) return
   
@@ -204,9 +210,7 @@ const handleCreateGroup = async () => {
     const groupData = {
       name: groupForm.name,
       description: groupForm.description,
-      daily_checkin_rule: {
-        min_checkins_per_day: groupForm.daily_checkin_required ? 1 : 0
-      }
+      daily_checkin_required: groupForm.daily_checkin_required
     }
     
     await api.groups.createGroup(groupData)
@@ -231,6 +235,13 @@ const viewGroupCheckins = (groupId, groupName) => {
   selectedGroupId.value = groupId
   selectedGroupName.value = groupName || groups.value.created.find(g => g.group_id === groupId)?.name || groups.value.joined.find(g => g.group_id === groupId)?.name || ''
   fetchGroupCheckins()
+}
+
+const goToGroupChat = (groupId, groupName) => {
+  router.push({
+    path: `/groups/${groupId}/chat`,
+    query: { name: groupName }
+  })
 }
 
 const fetchGroupCheckins = async () => {

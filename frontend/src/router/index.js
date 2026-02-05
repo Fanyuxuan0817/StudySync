@@ -37,15 +37,45 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/groups',
-    name: 'Groups',
-    component: () => import('../views/Groups.vue'),
-    meta: { requiresAuth: true }
-  },
+      path: '/groups',
+      name: 'Groups',
+      component: () => import('../views/Groups.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/groups/:id',
+      name: 'GroupDetail',
+      component: () => import('../views/GroupDetail.vue'),
+      meta: { requiresAuth: true }
+    },
   {
     path: '/ai-report',
     name: 'AIReport',
     component: () => import('../views/AIReport.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/chat-rooms',
+    name: 'ChatRoomManage',
+    component: () => import('../views/ChatRoomManage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/chat-rooms/search',
+    name: 'ChatRoomSearch',
+    component: () => import('../views/ChatRoomSearch.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/chat-rooms/:id',
+    name: 'ChatRoomDetail',
+    component: () => import('../views/ChatRoomDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/groups/:id/chat',
+    name: 'Chat',
+    component: () => import('../views/Chat.vue'),
     meta: { requiresAuth: true }
   }
 ]

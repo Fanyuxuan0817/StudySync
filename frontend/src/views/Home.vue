@@ -43,6 +43,15 @@
         <h2 class="card-title">我的学习计划</h2>
         <el-card :body-style="{ padding: '20px' }" class="plans-card-content">
           <div v-if="plans.length > 0">
+            <div class="plans-header">
+              <el-button type="primary" @click="showCreatePlanDialog" class="create-plan-btn">
+                创建计划
+              </el-button>
+              <el-button @click="goToChatRooms">
+                <el-icon><ChatDotRound /></el-icon>
+                群聊中心
+              </el-button>
+            </div>
             <el-table :data="plans" style="width: 100%">
               <el-table-column prop="title" label="计划名称" width="200" />
               <el-table-column prop="daily_goal_hours" label="每日目标" />
@@ -76,9 +85,15 @@
           </div>
           <div v-else class="no-plans">
             <el-empty description="暂无学习计划" />
-            <el-button type="primary" @click="showCreatePlanDialog">
-              创建计划
-            </el-button>
+            <div class="plan-actions">
+              <el-button type="primary" @click="showCreatePlanDialog">
+                创建计划
+              </el-button>
+              <el-button @click="goToChatRooms">
+                <el-icon><ChatDotRound /></el-icon>
+                群聊中心
+              </el-button>
+            </div>
           </div>
         </el-card>
       </div>
@@ -203,6 +218,10 @@ const navigateToCheckin = () => {
   router.push('/checkin')
 }
 
+const goToChatRooms = () => {
+  router.push('/chat-rooms')
+}
+
 const showCreatePlanDialog = () => {
   createPlanDialogVisible.value = true
 }
@@ -230,9 +249,11 @@ const handleCreatePlan = async () => {
       start_date: new Date(),
       end_date: null
     }
+    ElMessage.success('学习计划创建成功！')
   } catch (error) {
     console.error('创建计划失败:', error)
-    ElMessage.error('创建计划失败，请检查输入信息')
+    const errorMessage = error.response?.data?.message || '创建计划失败，请稍后重试'
+    ElMessage.error(errorMessage)
   }
 }
 
@@ -410,6 +431,24 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   height: 40px;
+}
+
+.plans-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.plan-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.create-plan-btn {
+  font-size: 14px;
 }
 
 .chart-container {
