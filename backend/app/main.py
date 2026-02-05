@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import auth, users, plans, checkins, groups, ai
-from app.routes import chat_rooms
+from app.routes import chat_rooms, chat_messages
 from app.database import engine, Base, get_db
 from app.models import User, Role, UserRole, Plan, Checkin, Group, GroupMember, AIWeeklyReport, APIKey
 from app.chat_models import ChatRoom, ChatRoomMember, ChatRoomJoinRequest, ChatMessage
@@ -22,6 +22,7 @@ app.include_router(plans.router, prefix="/api")
 app.include_router(checkins.router, prefix="/api")
 app.include_router(groups.router, prefix="/api")
 app.include_router(chat_rooms.router, prefix="/api")
+app.include_router(chat_messages.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 
 

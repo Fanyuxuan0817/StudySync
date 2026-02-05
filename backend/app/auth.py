@@ -61,6 +61,27 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     return current_user
 
 
+async def get_current_user_ws(token: str, db: Session) -> User:
+    """WebSocket 用的用户认证"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="无法验证凭证",
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id_str: str = payload.get("sub")
+        if user_id_str is None:
+            raise credentials_exception
+        user_id: int = int(user_id_str)
+    except (JWTError, ValueError):
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+
 def verify_api_key(api_key: str, db: Session) -> Optional[APIKey]:
     api_key_obj = db.query(APIKey).filter(
         APIKey.key == api_key,

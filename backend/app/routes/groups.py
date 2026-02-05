@@ -258,6 +258,114 @@ async def transfer_group_ownership(
     )
 
 
+@router.get("/{group_id}", response_model=ResponseModel)
+async def get_group(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取单个群组详情
+    
+    包含群组基本信息、成员数、当前用户角色等
+    """
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群组不存在"
+        )
+    
+    # 检查用户是否是群组成员
+    member = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == current_user.id
+    ).first()
+    
+    # 计算成员数
+    member_count = db.query(GroupMember).filter(GroupMember.group_id == group_id).count()
+    
+    return ResponseModel(
+        data={
+            "group_id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "daily_checkin_required": group.daily_checkin_required,
+            "creator_id": group.created_by,
+            "member_count": member_count,
+            "created_at": group.created_at,
+            "is_member": member is not None,
+            "user_role": member.role if member else None
+        }
+    )
+
+
+@router.put("/{group_id}", response_model=ResponseModel)
+async def update_group(
+    group_id: int,
+    update_data: GroupUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    更新群组信息（仅群主可操作）
+    
+    可更新字段：
+    - name: 群组名称
+    - description: 群组描述
+    - daily_checkin_required: 是否要求每日打卡
+    """
+    group = db.query(Group).filter(Group.id == group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群组不存在"
+        )
+    
+    # 验证操作者是否为群主
+    if group.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主才能更新群组信息"
+        )
+    
+    # 更新群组名称
+    if update_data.name is not None:
+        if len(update_data.name.strip()) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="群组名称不能为空"
+            )
+        group.name = update_data.name.strip()
+    
+    # 更新群组描述
+    if update_data.description is not None:
+        group.description = update_data.description
+    
+    # 更新每日打卡要求
+    if update_data.daily_checkin_required is not None:
+        group.daily_checkin_required = update_data.daily_checkin_required
+    
+    db.commit()
+    db.refresh(group)
+    
+    # 计算成员数
+    member_count = db.query(GroupMember).filter(GroupMember.group_id == group_id).count()
+    
+    return ResponseModel(
+        data={
+            "group_id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "daily_checkin_required": group.daily_checkin_required,
+            "creator_id": group.created_by,
+            "member_count": member_count,
+            "created_at": group.created_at,
+            "updated_at": group.updated_at if hasattr(group, 'updated_at') else None
+        }
+    )
+
+
 @router.get("", response_model=ResponseModel)
 async def get_groups(
     current_user: User = Depends(get_current_user),

@@ -336,8 +336,10 @@ const goToGroup = (groupId) => {
 }
 
 const enterChatRoom = () => {
-  // 这里可以导航到实际的聊天界面
-  ElMessage.info('聊天功能开发中...')
+  router.push({
+    path: `/chat/${roomInfo.value.group_info?.group_id || route.params.id}`,
+    query: { name: roomInfo.value.name }
+  })
 }
 
 // 数据加载函数

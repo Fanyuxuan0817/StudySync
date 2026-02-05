@@ -17,9 +17,13 @@
           <span class="item-icon">✏️</span>
           <span class="item-text">打卡</span>
         </router-link>
-        <router-link to="/chat-rooms" class="navbar-item" active-class="active">
+        <router-link to="/chat-session" class="navbar-item" active-class="active">
           <span class="item-icon">💬</span>
-          <span class="item-text">群聊中心</span>
+          <span class="item-text">群聊</span>
+        </router-link>
+        <router-link to="/chat-rooms" class="navbar-item" active-class="active">
+          <span class="item-icon">🔍</span>
+          <span class="item-text">发现</span>
         </router-link>
       </div>
       

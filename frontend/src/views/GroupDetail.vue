@@ -540,8 +540,14 @@ const saveSettings = async () => {
   try {
     await settingsFormRef.value.validate()
     
-    // 这里需要实现更新群组设置的API调用
-    // 暂时使用模拟数据
+    // 调用更新群组API
+    await api.groups.updateGroup(groupId.value, {
+      name: settingsForm.name,
+      description: settingsForm.description,
+      daily_checkin_required: settingsForm.daily_checkin_required
+    })
+    
+    // 更新本地数据
     groupInfo.value.name = settingsForm.name
     groupInfo.value.description = settingsForm.description
     groupInfo.value.daily_checkin_required = settingsForm.daily_checkin_required
@@ -551,7 +557,7 @@ const saveSettings = async () => {
     ElMessage.success('保存设置成功')
   } catch (error) {
     console.error('保存设置失败:', error)
-    ElMessage.error('保存设置失败')
+    ElMessage.error(error.response?.data?.detail || '保存设置失败')
   }
 }
 
@@ -604,13 +610,13 @@ const confirmDissolveGroup = () => {
   confirmDialogContent.value = '确定要解散该群组吗？此操作不可恢复。'
   confirmActionCallback.value = async () => {
     try {
-      // 这里需要实现解散群组的API调用
-      // 暂时使用模拟数据
+      // 调用后端删除群组API
+      await api.groups.deleteGroup(groupId.value)
       ElMessage.success('解散群组成功')
       router.push('/groups')
     } catch (error) {
       console.error('解散群组失败:', error)
-      ElMessage.error('解散群组失败')
+      ElMessage.error(error.response?.data?.detail || '解散群组失败')
     }
   }
   confirmDialogVisible.value = true
@@ -625,7 +631,7 @@ const confirmAction = () => {
 
 const goToGroupChat = () => {
   router.push({
-    path: `/groups/${groupId.value}/chat`,
+    path: `/chat/${groupId.value}`,
     query: { name: groupInfo.value.name }
   })
 }

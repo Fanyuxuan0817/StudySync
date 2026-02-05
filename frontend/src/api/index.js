@@ -78,6 +78,9 @@ const api = {
   groups: {
     createGroup: (data) => apiClient.post('/groups', data),
     getGroups: () => apiClient.get('/groups'),
+    getGroup: (id) => apiClient.get(`/groups/${id}`),
+    updateGroup: (id, data) => apiClient.put(`/groups/${id}`, data),
+    deleteGroup: (id) => apiClient.delete(`/groups/${id}`),
     joinGroup: (id) => apiClient.post(`/groups/${id}/join`),
     leaveGroup: (id) => apiClient.post(`/groups/${id}/leave`),
     getGroupMembers: (id, params) => apiClient.get(`/groups/${id}/members`, { params }),
@@ -99,7 +102,15 @@ const api = {
     updateChatRoom: (id, data) => apiClient.put(`/chat-rooms/${id}`, data),
     deleteChatRoom: (id) => apiClient.delete(`/chat-rooms/${id}`),
     leaveChatRoom: (id) => apiClient.post(`/chat-rooms/${id}/leave`),
-    getPendingApprovals: () => apiClient.get('/chat-rooms/join-requests/pending')
+    getPendingApprovals: () => apiClient.get('/chat-rooms/join-requests/pending'),
+    // 消息相关API
+    getMessages: (chatRoomId, params) => apiClient.get(`/chat-rooms/${chatRoomId}/messages`, { params }),
+    sendMessage: (chatRoomId, content, messageType = 'text') => apiClient.post(`/chat-rooms/${chatRoomId}/messages`, null, {
+      params: { content, message_type: messageType }
+    }),
+    deleteMessage: (chatRoomId, messageId) => apiClient.delete(`/chat-rooms/${chatRoomId}/messages/${messageId}`),
+    searchMessages: (chatRoomId, params) => apiClient.get(`/chat-rooms/${chatRoomId}/messages/search`, { params }),
+    getRecentMessages: (chatRoomId, params) => apiClient.get(`/chat-rooms/${chatRoomId}/messages/recent`, { params })
   },
   ai: {
     getWeeklyReport: (params) => apiClient.get('/ai/weekly_report', { params }),
