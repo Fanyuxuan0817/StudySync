@@ -123,26 +123,39 @@ a:hover {
   background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%) !important;
   border: none !important;
   box-shadow: 0 4px 14px rgba(255, 107, 107, 0.35) !important;
+  color: white !important;
 }
 
 .el-button--primary:hover {
   transform: translateY(-2px) !important;
   box-shadow: 0 6px 20px rgba(255, 107, 107, 0.45) !important;
+  color: white !important;
 }
 
 .el-button--primary:active {
   transform: scale(0.98) !important;
+  color: white !important;
 }
 
 .el-button--success {
   background: linear-gradient(135deg, #6BCB77 0%, #5ABF66 100%) !important;
   border: none !important;
   box-shadow: 0 4px 14px rgba(107, 203, 119, 0.35) !important;
+  color: white !important;
+}
+
+.el-button--success:hover {
+  color: white !important;
 }
 
 .el-button--danger {
   background: linear-gradient(135deg, #FF6B6B 0%, #FF5252 100%) !important;
   border: none !important;
+  color: white !important;
+}
+
+.el-button--danger:hover {
+  color: white !important;
 }
 
 /* 输入框样式 */

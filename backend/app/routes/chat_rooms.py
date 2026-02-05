@@ -345,7 +345,7 @@ async def search_chat_rooms(
 
 @router.get("/search-by-id")
 async def search_chat_room_by_id(
-    chat_id_search: ChatIdSearchRequest = Depends(),
+    chat_id: str = Query(..., min_length=6, max_length=20, description="群聊ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -355,7 +355,7 @@ async def search_chat_room_by_id(
     用于加入群聊时的快速搜索
     """
     # 验证群聊ID格式
-    if not ChatIdGenerator.is_valid(chat_id_search.chat_id):
+    if not ChatIdGenerator.is_valid(chat_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="群聊ID格式无效"
@@ -363,7 +363,7 @@ async def search_chat_room_by_id(
     
     # 搜索群聊
     chat_room = db.query(ChatRoom).filter(
-        ChatRoom.chat_id == chat_id_search.chat_id.upper(),
+        ChatRoom.chat_id == chat_id.upper(),
         ChatRoom.status == ChatRoomStatus.ACTIVE
     ).first()
     

@@ -343,7 +343,7 @@ const handleSearch = async (retryCount = 0) => {
     if (searchForm.chatId) {
       try {
         const response = await api.chatRooms.searchByChatId(searchForm.chatId)
-        chatRooms.value = [response.data]
+        chatRooms.value = [response.data?.data]
         total.value = 1
       } catch (error) {
         if (error.response?.status === 404) {
@@ -360,27 +360,28 @@ const handleSearch = async (retryCount = 0) => {
       console.log(`[API请求] 关键词搜索参数:`, params)
       const response = await api.chatRooms.searchChatRooms(params)
       console.log(`[API响应] 关键词搜索结果:`, response)
-      // 增强数据完整性验证
-      chatRooms.value = response.data?.chat_rooms || []
-      total.value = response.data?.total || 0
-      
+      // 增强数据完整性验证 - API返回结构: response.data.data.chat_rooms
+      const responseData = response.data?.data || {}
+      chatRooms.value = responseData.chat_rooms || []
+      total.value = responseData.total || 0
+
       // 更新成功统计
       loadStats.value.successCount++
       loadStats.value.lastError = null
-      
+
       // 详细调试信息
       console.log(`[搜索成功] 结果:`, {
         dataCount: chatRooms.value.length,
         totalCount: total.value,
-        responseData: response.data,
+        responseData: responseData,
         loadTime: Date.now() - startTime + 'ms'
       })
-      
+
       // 数据验证
       if (chatRooms.value.length === 0 && total.value > 0) {
         console.warn('[数据异常] 总计数大于0但实际数据为空')
       }
-      
+
       // 触发搜索完成事件
       emit('search-complete', {
         results: chatRooms.value,
@@ -393,9 +394,10 @@ const handleSearch = async (retryCount = 0) => {
       console.log(`[API请求] 公开群聊列表参数:`, params)
       const response = await api.chatRooms.searchChatRooms(params)
       console.log(`[API响应] 公开群聊列表结果:`, response)
-      // 增强数据完整性验证
-      chatRooms.value = response.data?.chat_rooms || []
-      total.value = response.data?.total || 0
+      // 增强数据完整性验证 - API返回结构: response.data.data.chat_rooms
+      const responseData = response.data?.data || {}
+      chatRooms.value = responseData.chat_rooms || []
+      total.value = responseData.total || 0
     }
   } catch (error) {
     // 确保即使出错也清空结果，避免显示旧数据
