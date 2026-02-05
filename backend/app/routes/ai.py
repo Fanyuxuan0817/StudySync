@@ -126,7 +126,23 @@ async def stream_weekly_report(
 4. 改进建议
 5. 推荐学习时长
 
-要求分析详细、具体，避免空泛的描述。"""
+要求分析详细、具体，避免空泛的描述。在提供改进建议时，请参考以下专业学习策略：
+
+优先建立打卡习惯：将"每日打卡"作为学习计划的最低执行标准，确保学习行为的连续性。即使在时间紧张的情况下，也应完成至少15-20分钟的学习并进行打卡记录。建议从设定25分钟的每日最低学习时长开始，逐步培养稳定的学习习惯，使学习成为日常生活中不可或缺的一部分。
+
+制定固定学习时段：在每日时间表中规划并固定一个30-60分钟的专属学习时段，选择不易被打扰的时间段，如早晨起床后、午休后或晚上睡前。通过持续在固定时间进行学习，建立条件反射和生物钟，提高学习效率和习惯养成速度。
+
+采用微学习策略：针对时间碎片化的情况，实施微学习策略以维持学习连贯性。可在通勤途中收听课程音频、利用排队等待时间记忆核心知识点、睡前10分钟回顾当日学习内容等。所有微学习活动均需记录并计入打卡系统，确保学习热度不中断。
+
+增强计划与记录体系：建立周计划与日任务的双层规划系统。每周初制定明确的学习主题和时间分配方案；每日学习前设定具体可执行的任务目标，如"完成第一章第二节阅读并制作思维导图笔记"，避免模糊的"学习一会儿"等非具体目标。学习结束后进行任务完成情况记录与反思。
+
+利用周末进行整合提升：针对工作日时间有限的特点，合理规划周末学习时间。建议安排2-3小时进行本周学习内容的系统复习、知识体系整理和实践练习，通过阶段性整合与巩固，强化学习效果并为下周学习做好准备。
+
+【输出格式要求】
+- 严格禁止使用任何Markdown格式元素，包括但不限于：标题符号(#)、列表标记(*、-、+)、粗体(**)、斜体(*)、链接格式([text](url))、代码块(```)、表格(|)、引用符号(>)、水平线(---)等
+- 仅返回纯文本内容，使用自然的换行和空格来组织内容结构
+- 确保文本逻辑清晰、结构合理、段落分明，具有高度可读性
+- 直接输出未经格式化的原始文本，不使用任何特殊格式标记或语法"""
     
     def generate():
         # 先输出基本统计数据
@@ -200,32 +216,19 @@ async def stream_weekly_report(
 @router.post("/generate_report", response_model=ResponseModel)
 async def generate_report(
     report_data: AIReportGenerate,
-    api_key_obj = Depends(api_key_auth),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.id == report_data.user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="用户不存在"
-        )
+    user_id = current_user.id
     
     existing_report = db.query(AIWeeklyReport).filter(
-        AIWeeklyReport.user_id == report_data.user_id,
+        AIWeeklyReport.user_id == user_id,
         AIWeeklyReport.week_start == report_data.week_start
     ).first()
     
-    if existing_report:
-        return ResponseModel(
-            data={
-                "task_id": str(uuid.uuid4()),
-                "status": "completed",
-                "estimated_time": 0
-            }
-        )
-    
+    # 获取打卡数据
     checkins = db.query(Checkin).filter(
-        Checkin.user_id == report_data.user_id,
+        Checkin.user_id == user_id,
         Checkin.checkin_date >= report_data.week_start,
         Checkin.checkin_date <= report_data.week_end
     ).all()
@@ -258,24 +261,33 @@ async def generate_report(
         issues.append("打卡频率不稳定")
         suggestions.append("建议制定固定学习时间，培养学习习惯")
     
-    new_report = AIWeeklyReport(
-        user_id=report_data.user_id,
-        week_start=report_data.week_start,
-        week_end=report_data.week_end,
-        score=score,
-        summary="本周学习情况分析",
-        issues=json.dumps(issues, ensure_ascii=False),
-        suggestions=json.dumps(suggestions, ensure_ascii=False)
-    )
-    
-    db.add(new_report)
-    db.commit()
+    if existing_report:
+        # 更新现有报告
+        existing_report.score = score
+        existing_report.summary = "本周学习情况分析"
+        existing_report.issues = json.dumps(issues, ensure_ascii=False)
+        existing_report.suggestions = json.dumps(suggestions, ensure_ascii=False)
+        existing_report.updated_at = datetime.now()
+        db.commit()
+    else:
+        # 创建新报告
+        new_report = AIWeeklyReport(
+            user_id=user_id,
+            week_start=report_data.week_start,
+            week_end=report_data.week_end,
+            score=score,
+            summary="本周学习情况分析",
+            issues=json.dumps(issues, ensure_ascii=False),
+            suggestions=json.dumps(suggestions, ensure_ascii=False)
+        )
+        db.add(new_report)
+        db.commit()
     
     return ResponseModel(
         data={
             "task_id": str(uuid.uuid4()),
-            "status": "processing",
-            "estimated_time": 5
+            "status": "completed",
+            "estimated_time": 0
         }
     )
 
@@ -294,22 +306,12 @@ async def learning_coach_stream(
 2）科学的下一阶段学习路线建议（需具备可操作性）
 3）详细的未来一周具体任务安排（需明确具体行动项）
 
-【输出格式必须严格按照下面结构】
-————————————
-【一、学习状态评估】
-- 3~5 条要点（基于提供的学习数据，每条评估需包含数据支撑和具体分析）
+【输出格式要求】
+- 严格禁止使用任何Markdown格式元素，包括但不限于：标题符号(#)、列表标记(*、-、+)、粗体(**)、斜体(*)、链接格式([text](url))、代码块(```)、表格(|)、引用符号(>)、水平线(---)等
+- 仅返回纯文本内容，使用自然的换行和空格来组织内容结构
+- 确保文本逻辑清晰、结构合理、段落分明，具有高度可读性
+- 直接输出未经格式化的原始文本，不使用任何特殊格式标记或语法
 
-【二、下一阶段学习路线建议】
-- 1条总体方向建议（需与考研数学目标直接相关）
-- 2~3 条阶段拆解建议（需体现循序渐进的学习逻辑，如：基础巩固→专题强化→综合应用等阶段划分）
-
-【三、未来一周任务安排】
-请给出7天的详细学习安排，每天内容必须包含：
-- 学习重点（具体知识点或任务，需明确具体内容）
-- 建议时长（精确到0.5小时的时间分配）
-- 学习方式（明确具体方法，如：观看基础视频/完成XX章节习题/整理错题本/进行模拟测试/制作知识点思维导图等）
-
-————————————
 【学习数据】
 - 学习目标：{learning_data.learning_goal}
 - 本周总学习时长：{learning_data.weekly_total_hours}小时
@@ -468,7 +470,23 @@ async def get_checkin_analysis(
 3. 发现的问题和改进建议
 4. 具体可行的优化方案
 
-要求分析要具体、可操作，避免空泛的建议。"""
+要求分析要具体、可操作，避免空泛的建议。在提供改进建议时，请参考以下专业学习策略：
+
+优先建立打卡习惯：将"每日打卡"作为学习计划的最低执行标准，确保学习行为的连续性。即使在时间紧张的情况下，也应完成至少15-20分钟的学习并进行打卡记录。建议从设定25分钟的每日最低学习时长开始，逐步培养稳定的学习习惯，使学习成为日常生活中不可或缺的一部分。
+
+制定固定学习时段：在每日时间表中规划并固定一个30-60分钟的专属学习时段，选择不易被打扰的时间段，如早晨起床后、午休后或晚上睡前。通过持续在固定时间进行学习，建立条件反射和生物钟，提高学习效率和习惯养成速度。
+
+采用微学习策略：针对时间碎片化的情况，实施微学习策略以维持学习连贯性。可在通勤途中收听课程音频、利用排队等待时间记忆核心知识点、睡前10分钟回顾当日学习内容等。所有微学习活动均需记录并计入打卡系统，确保学习热度不中断。
+
+增强计划与记录体系：建立周计划与日任务的双层规划系统。每周初制定明确的学习主题和时间分配方案；每日学习前设定具体可执行的任务目标，如"完成第一章第二节阅读并制作思维导图笔记"，避免模糊的"学习一会儿"等非具体目标。学习结束后进行任务完成情况记录与反思。
+
+利用周末进行整合提升：针对工作日时间有限的特点，合理规划周末学习时间。建议安排2-3小时进行本周学习内容的系统复习、知识体系整理和实践练习，通过阶段性整合与巩固，强化学习效果并为下周学习做好准备。
+
+【输出格式要求】
+- 严格禁止使用任何Markdown格式元素，包括但不限于：标题符号(#)、列表标记(*、-、+)、粗体(**)、斜体(*)、链接格式([text](url))、代码块(```)、表格(|)、引用符号(>)、水平线(---)等
+- 仅返回纯文本内容，使用自然的换行和空格来组织内容结构
+- 确保文本逻辑清晰、结构合理、段落分明，具有高度可读性
+- 直接输出未经格式化的原始文本，不使用任何特殊格式标记或语法"""
 
         # 使用同步调用
         response = deepseek_client.chat.completions.create(

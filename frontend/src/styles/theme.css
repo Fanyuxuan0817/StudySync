@@ -1,0 +1,325 @@
+/* StudySync 自定义主题 - 卡通苹果风格 */
+
+:root {
+  /* ===== 主色调 - 温暖珊瑚系 ===== */
+  --ss-primary: #FF6B6B;
+  --ss-primary-light: #FF8E8E;
+  --ss-primary-lighter: #FFB1B1;
+  --ss-primary-lightest: #FFE5E5;
+  --ss-primary-dark: #E55A5A;
+  
+  /* ===== 辅助色 ===== */
+  --ss-secondary: #FFD93D;
+  --ss-secondary-light: #FFE066;
+  --ss-success: #6BCB77;
+  --ss-success-light: #8FD99A;
+  --ss-info: #4D96FF;
+  --ss-info-light: #7AB8FF;
+  --ss-warning: #FFB347;
+  --ss-danger: #FF6B6B;
+  
+  /* ===== 中性色 ===== */
+  --ss-bg: #FAFAF8;
+  --ss-bg-warm: #FFF8F5;
+  --ss-card: #FFFFFF;
+  --ss-text-primary: #2D3436;
+  --ss-text-secondary: #636E72;
+  --ss-text-tertiary: #B2BEC3;
+  --ss-border: #E8E8E8;
+  --ss-border-light: #F0F0F0;
+  
+  /* ===== 渐变定义 ===== */
+  --ss-gradient-primary: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%);
+  --ss-gradient-warm: linear-gradient(135deg, #FFE5E5 0%, #FFF4E6 100%);
+  --ss-gradient-sunny: linear-gradient(135deg, #FFD93D 0%, #FFB347 100%);
+  --ss-gradient-fresh: linear-gradient(135deg, #6BCB77 0%, #4D96FF 100%);
+  --ss-gradient-card: linear-gradient(180deg, #FFFFFF 0%, #FAFAF8 100%);
+  
+  /* ===== 阴影 ===== */
+  --ss-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --ss-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --ss-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --ss-shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.12);
+  --ss-shadow-colored: 0 4px 20px rgba(255, 107, 107, 0.15);
+  
+  /* ===== 圆角 ===== */
+  --ss-radius-sm: 8px;
+  --ss-radius: 16px;
+  --ss-radius-lg: 24px;
+  --ss-radius-xl: 32px;
+  --ss-radius-full: 9999px;
+  
+  /* ===== 过渡 ===== */
+  --ss-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ss-transition: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ss-transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ss-transition-bounce: 300ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ===== Element Plus 主题覆盖 ===== */
+:root {
+  --el-color-primary: #FF6B6B;
+  --el-color-primary-light-3: #FF8E8E;
+  --el-color-primary-light-5: #FFB1B1;
+  --el-color-primary-light-7: #FFD4D4;
+  --el-color-primary-light-8: #FFE5E5;
+  --el-color-primary-light-9: #FFF0F0;
+  --el-color-primary-dark-2: #E55A5A;
+  
+  --el-color-success: #6BCB77;
+  --el-color-warning: #FFB347;
+  --el-color-danger: #FF6B6B;
+  --el-color-info: #4D96FF;
+  
+  --el-border-radius-base: 12px;
+  --el-border-radius-small: 8px;
+  --el-border-radius-round: 20px;
+  --el-border-radius-circle: 50%;
+  
+  --el-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --el-box-shadow-lighter: 0 2px 4px rgba(0, 0, 0, 0.02);
+  --el-box-shadow-dark: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* ===== 全局样式重置 ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background-color: var(--ss-bg);
+  color: var(--ss-text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== 卡片基础样式 ===== */
+.ss-card {
+  background: var(--ss-card);
+  border-radius: var(--ss-radius-lg);
+  box-shadow: var(--ss-shadow);
+  transition: all var(--ss-transition);
+  border: 1px solid var(--ss-border-light);
+}
+
+.ss-card:hover {
+  box-shadow: var(--ss-shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* ===== 按钮样式 ===== */
+.ss-btn {
+  border-radius: var(--ss-radius-full) !important;
+  font-weight: 500;
+  transition: all var(--ss-transition-bounce);
+  border: none !important;
+}
+
+.ss-btn-primary {
+  background: var(--ss-gradient-primary) !important;
+  box-shadow: 0 4px 14px rgba(255, 107, 107, 0.35);
+}
+
+.ss-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.45);
+}
+
+.ss-btn-success {
+  background: linear-gradient(135deg, #6BCB77 0%, #5ABF66 100%) !important;
+  box-shadow: 0 4px 14px rgba(107, 203, 119, 0.35);
+}
+
+/* ===== 输入框样式 ===== */
+.ss-input .el-input__wrapper {
+  border-radius: var(--ss-radius) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  border: 2px solid transparent;
+  transition: all var(--ss-transition);
+}
+
+.ss-input .el-input__wrapper:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.ss-input .el-input__wrapper.is-focus {
+  border-color: var(--ss-primary-light);
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.1), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ===== 标签样式 ===== */
+.ss-tag {
+  border-radius: var(--ss-radius-full) !important;
+  font-weight: 500;
+  padding: 4px 12px !important;
+}
+
+/* ===== 头像样式 ===== */
+.ss-avatar {
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-avatar-ring {
+  position: relative;
+}
+
+.ss-avatar-ring::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: var(--ss-gradient-primary);
+  z-index: -1;
+}
+
+/* ===== 进度条样式 ===== */
+.ss-progress .el-progress-bar__outer {
+  border-radius: var(--ss-radius-full) !important;
+  background-color: var(--ss-border-light) !important;
+}
+
+.ss-progress .el-progress-bar__inner {
+  border-radius: var(--ss-radius-full) !important;
+  background: var(--ss-gradient-primary) !important;
+}
+
+/* ===== 表格样式 ===== */
+.ss-table {
+  border-radius: var(--ss-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--ss-shadow);
+}
+
+.ss-table .el-table__header th {
+  background: var(--ss-bg-warm) !important;
+  font-weight: 600;
+  color: var(--ss-text-primary);
+}
+
+.ss-table .el-table__row {
+  transition: background-color var(--ss-transition-fast);
+}
+
+.ss-table .el-table__row:hover {
+  background-color: var(--ss-bg-warm) !important;
+}
+
+/* ===== 对话框样式 ===== */
+.ss-dialog .el-dialog {
+  border-radius: var(--ss-radius-xl) !important;
+  box-shadow: var(--ss-shadow-xl) !important;
+}
+
+.ss-dialog .el-dialog__header {
+  padding: 24px 24px 16px !important;
+  border-bottom: 1px solid var(--ss-border-light);
+}
+
+.ss-dialog .el-dialog__body {
+  padding: 20px 24px !important;
+}
+
+.ss-dialog .el-dialog__footer {
+  padding: 16px 24px 24px !important;
+}
+
+/* ===== 下拉菜单样式 ===== */
+.ss-dropdown .el-dropdown-menu {
+  border-radius: var(--ss-radius) !important;
+  box-shadow: var(--ss-shadow-lg) !important;
+  border: 1px solid var(--ss-border-light) !important;
+  padding: 8px !important;
+}
+
+.ss-dropdown .el-dropdown-menu__item {
+  border-radius: var(--ss-radius-sm);
+  padding: 10px 16px !important;
+  transition: all var(--ss-transition-fast);
+}
+
+.ss-dropdown .el-dropdown-menu__item:hover {
+  background: var(--ss-primary-lightest) !important;
+  color: var(--ss-primary) !important;
+}
+
+/* ===== 标签页样式 ===== */
+.ss-tabs .el-tabs__nav-wrap::after {
+  height: 1px;
+  background: var(--ss-border);
+}
+
+.ss-tabs .el-tabs__item {
+  font-weight: 500;
+  transition: all var(--ss-transition-fast);
+}
+
+.ss-tabs .el-tabs__item.is-active {
+  color: var(--ss-primary);
+}
+
+.ss-tabs .el-tabs__active-bar {
+  background: var(--ss-gradient-primary);
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* ===== 空状态样式 ===== */
+.ss-empty .el-empty__description {
+  color: var(--ss-text-secondary);
+  font-size: 14px;
+}
+
+/* ===== 警告提示样式 ===== */
+.ss-alert {
+  border-radius: var(--ss-radius) !important;
+  border: none !important;
+}
+
+.ss-alert.el-alert--success {
+  background: rgba(107, 203, 119, 0.1) !important;
+  color: #4CAF50 !important;
+}
+
+.ss-alert.el-alert--warning {
+  background: rgba(255, 179, 71, 0.1) !important;
+  color: #FF9800 !important;
+}
+
+.ss-alert.el-alert--error {
+  background: rgba(255, 107, 107, 0.1) !important;
+  color: var(--ss-danger) !important;
+}
+
+/* ===== 选择器样式 ===== */
+.ss-select .el-input__wrapper {
+  border-radius: var(--ss-radius) !important;
+}
+
+/* ===== 日期选择器样式 ===== */
+.ss-date-picker .el-input__wrapper {
+  border-radius: var(--ss-radius) !important;
+}
+
+/* ===== 数字输入框样式 ===== */
+.ss-input-number .el-input__wrapper {
+  border-radius: var(--ss-radius) !important;
+}
+
+/* ===== 文本域样式 ===== */
+.ss-textarea .el-textarea__inner {
+  border-radius: var(--ss-radius) !important;
+  border: 2px solid var(--ss-border-light);
+  transition: all var(--ss-transition);
+}
+
+.ss-textarea .el-textarea__inner:focus {
+  border-color: var(--ss-primary-light);
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.1);
+}

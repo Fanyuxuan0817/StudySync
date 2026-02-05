@@ -114,8 +114,10 @@ class AIWeeklyReport(Base):
     week_end = Column(Date, nullable=False)
     score = Column(Integer, nullable=False)
     summary = Column(Text, nullable=True)
+    issues = Column(Text, nullable=True)
     suggestions = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="ai_reports")
 

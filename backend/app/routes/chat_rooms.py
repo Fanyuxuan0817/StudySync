@@ -112,6 +112,136 @@ async def create_chat_room(
     )
 
 
+@router.get("/my-rooms")
+async def get_my_chat_rooms(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取我的群聊列表
+
+    返回：
+    - created: 我创建的群聊
+    - joined: 我加入的群聊
+    """
+    # 获取用户创建的所有群聊
+    created_rooms = db.query(ChatRoom).filter(
+        ChatRoom.created_by == current_user.id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).all()
+
+    # 获取用户加入的群聊（通过ChatRoomMember表）
+    joined_member_records = db.query(ChatRoomMember).filter(
+        ChatRoomMember.user_id == current_user.id
+    ).all()
+
+    joined_room_ids = [m.chat_room_id for m in joined_member_records]
+
+    # 获取加入的群聊详情（排除自己创建的）
+    joined_rooms = db.query(ChatRoom).filter(
+        ChatRoom.id.in_(joined_room_ids),
+        ChatRoom.created_by != current_user.id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).all()
+
+    # 构建返回数据
+    created_data = []
+    for room in created_rooms:
+        # 获取成员数
+        member_count = db.query(func.count(ChatRoomMember.id)).filter(
+            ChatRoomMember.chat_room_id == room.id
+        ).scalar() or 0
+
+        created_data.append({
+            "room_id": room.id,
+            "chat_id": room.chat_id,
+            "name": room.name,
+            "description": room.description,
+            "avatar_url": room.avatar_url,
+            "member_count": member_count,
+            "max_members": room.max_members,
+            "is_public": room.is_public,
+            "created_at": room.created_at
+        })
+
+    joined_data = []
+    for room in joined_rooms:
+        # 获取成员数
+        member_count = db.query(func.count(ChatRoomMember.id)).filter(
+            ChatRoomMember.chat_room_id == room.id
+        ).scalar() or 0
+
+        joined_data.append({
+            "room_id": room.id,
+            "chat_id": room.chat_id,
+            "name": room.name,
+            "description": room.description,
+            "avatar_url": room.avatar_url,
+            "member_count": member_count,
+            "max_members": room.max_members,
+            "is_public": room.is_public,
+            "created_at": room.created_at
+        })
+
+    from app.schemas import ResponseModel
+    return ResponseModel(
+        data={
+            "created": created_data,
+            "joined": joined_data
+        }
+    )
+
+
+@router.get("/join-requests/pending")
+async def get_pending_join_requests(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取当前用户作为群主/管理员的所有待处理入群申请
+    """
+    # 获取用户管理的所有群聊（群主或管理员）
+    managed_members = db.query(ChatRoomMember).filter(
+        ChatRoomMember.user_id == current_user.id,
+        ChatRoomMember.role.in_(["owner", "admin"])
+    ).all()
+
+    managed_room_ids = [m.chat_room_id for m in managed_members]
+
+    if not managed_room_ids:
+        from app.schemas import ResponseModel
+        return ResponseModel(data={"approvals": []})
+
+    # 查询这些群聊的待处理申请
+    pending_requests = db.query(ChatRoomJoinRequest, User, ChatRoom).join(
+        User, ChatRoomJoinRequest.user_id == User.id
+    ).join(
+        ChatRoom, ChatRoomJoinRequest.chat_room_id == ChatRoom.id
+    ).filter(
+        ChatRoomJoinRequest.chat_room_id.in_(managed_room_ids),
+        ChatRoomJoinRequest.status == ChatRoomJoinStatus.PENDING
+    ).order_by(ChatRoomJoinRequest.created_at.desc()).all()
+
+    approvals_data = []
+    for request, user, chat_room in pending_requests:
+        approvals_data.append({
+            "approval_id": request.id,
+            "request_id": request.id,
+            "chat_room_id": request.chat_room_id,
+            "room_id": request.chat_room_id,
+            "chat_id": chat_room.chat_id,
+            "room_name": chat_room.name,
+            "user_id": request.user_id,
+            "user_name": user.username,
+            "username": user.username,
+            "message": request.message,
+            "created_at": request.created_at
+        })
+
+    from app.schemas import ResponseModel
+    return ResponseModel(data={"approvals": approvals_data})
+
+
 @router.get("/search")
 async def search_chat_rooms(
     keyword: Optional[str] = Query(None, description="搜索关键词"),
@@ -331,6 +461,187 @@ async def get_chat_room(
             created_at=chat_room.created_at
         ).model_dump()
     )
+
+
+@router.put("/{chat_room_id}")
+async def update_chat_room(
+    chat_room_id: int,
+    update_data: ChatRoomUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    更新群聊信息（仅群主或管理员可操作）
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.id == chat_room_id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在或已关闭"
+        )
+    
+    # 验证用户权限（群主或管理员）
+    member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id,
+        ChatRoomMember.role.in_(["owner", "admin"])
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主或管理员才能编辑群聊"
+        )
+    
+    # 更新群聊信息
+    if update_data.name is not None:
+        if len(update_data.name.strip()) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="群聊名称不能为空"
+            )
+        chat_room.name = update_data.name.strip()
+    
+    if update_data.description is not None:
+        chat_room.description = update_data.description
+    
+    if update_data.avatar_url is not None:
+        chat_room.avatar_url = update_data.avatar_url
+    
+    if update_data.is_public is not None:
+        chat_room.is_public = update_data.is_public
+    
+    if update_data.max_members is not None:
+        # 检查当前成员数是否超过新的上限
+        current_members = db.query(func.count(ChatRoomMember.id)).filter(
+            ChatRoomMember.chat_room_id == chat_room_id
+        ).scalar() or 0
+        
+        if update_data.max_members < current_members:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="新的成员上限不能小于当前成员数"
+            )
+        chat_room.max_members = update_data.max_members
+    
+    db.commit()
+    db.refresh(chat_room)
+    
+    # 获取当前成员数
+    current_members = db.query(func.count(ChatRoomMember.id)).filter(
+        ChatRoomMember.chat_room_id == chat_room_id
+    ).scalar() or 0
+    
+    from app.schemas import ResponseModel
+    
+    return ResponseModel(
+        data=ChatRoomResponse(
+            chat_room_id=chat_room.id,
+            chat_id=chat_room.chat_id,
+            name=chat_room.name,
+            description=chat_room.description,
+            avatar_url=chat_room.avatar_url,
+            group_id=chat_room.group_id,
+            creator_id=chat_room.created_by,
+            max_members=chat_room.max_members,
+            current_members=current_members,
+            is_public=chat_room.is_public,
+            status=chat_room.status,
+            created_at=chat_room.created_at
+        ).model_dump()
+    )
+
+
+@router.delete("/{chat_room_id}")
+async def delete_chat_room(
+    chat_room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    删除群聊（仅群主可操作）
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.id == chat_room_id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在或已关闭"
+        )
+    
+    # 验证用户是群主
+    if chat_room.created_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主才能删除群聊"
+        )
+    
+    # 软删除：将状态改为已关闭
+    chat_room.status = ChatRoomStatus.CLOSED
+    db.commit()
+    
+    from app.schemas import ResponseModel
+    return ResponseModel(data={"message": "群聊已成功删除"})
+
+
+@router.post("/{chat_room_id}/leave")
+async def leave_chat_room(
+    chat_room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    退出群聊
+    
+    特殊规则：
+    - 群主不能直接退出，需要先转让群主或删除群聊
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.id == chat_room_id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在或已关闭"
+        )
+    
+    # 获取成员记录
+    member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="您不在该群聊中"
+        )
+    
+    # 群主不能退出
+    if member.role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="群主不能退出群聊，请先转让群主或删除群聊"
+        )
+    
+    # 删除成员记录
+    db.delete(member)
+    db.commit()
+    
+    from app.schemas import ResponseModel
+    return ResponseModel(data={"message": "已成功退出群聊"})
 
 
 @router.post("/{chat_room_id}/join-request")
@@ -648,3 +959,5 @@ async def get_chat_room_members(
             members=members_data
         ).model_dump()
     )
+
+

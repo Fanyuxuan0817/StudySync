@@ -88,13 +88,18 @@ const api = {
   chatRooms: {
     // 群聊相关API
     createChatRoom: (data) => apiClient.post('/chat-rooms', data),
+    getChatRooms: () => apiClient.get('/chat-rooms/my-rooms'),
     getChatRoom: (id) => apiClient.get(`/chat-rooms/${id}`),
     searchChatRooms: (params) => apiClient.get('/chat-rooms/search', { params }),
     searchByChatId: (chatId) => apiClient.get('/chat-rooms/search-by-id', { params: { chat_id: chatId } }),
     getChatRoomMembers: (id) => apiClient.get(`/chat-rooms/${id}/members`),
     createJoinRequest: (chatRoomId, data) => apiClient.post(`/chat-rooms/${chatRoomId}/join-request`, data),
     getJoinRequests: (chatRoomId, params) => apiClient.get(`/chat-rooms/${chatRoomId}/join-requests`, { params }),
-    reviewJoinRequest: (chatRoomId, requestId, data) => apiClient.post(`/chat-rooms/${chatRoomId}/join-requests/${requestId}/review`, data)
+    reviewJoinRequest: (chatRoomId, requestId, data) => apiClient.post(`/chat-rooms/${chatRoomId}/join-requests/${requestId}/review`, data),
+    updateChatRoom: (id, data) => apiClient.put(`/chat-rooms/${id}`, data),
+    deleteChatRoom: (id) => apiClient.delete(`/chat-rooms/${id}`),
+    leaveChatRoom: (id) => apiClient.post(`/chat-rooms/${id}/leave`),
+    getPendingApprovals: () => apiClient.get('/chat-rooms/join-requests/pending')
   },
   ai: {
     getWeeklyReport: (params) => apiClient.get('/ai/weekly_report', { params }),

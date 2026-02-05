@@ -16,8 +16,13 @@
             />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="fetchWeeklyReport">
-              生成报告
+            <el-button type="primary" @click="fetchWeeklyReport" :loading="isGenerating">
+              {{ weeklyReport ? '刷新报告' : '生成报告' }}
+            </el-button>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="warning" @click="regenerateReport" :loading="isRegenerating">
+              重新生成
             </el-button>
           </el-form-item>
         </el-form>
@@ -341,11 +346,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '../store/modules/auth'
 import api from '../api'
+import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const weekStartDate = ref(new Date())
 const weeklyReport = ref(null)
 const error = ref('')
+const isGenerating = ref(false)
+const isRegenerating = ref(false)
 
 // AI学习教练相关
 const learningData = ref({
@@ -371,6 +379,7 @@ const isAnalysisLoading = ref(false)
 // 方法
 const fetchWeeklyReport = async () => {
   try {
+    isGenerating.value = true
     error.value = ''
     // 将日期转换为ISO格式，只保留日期部分（YYYY-MM-DD）
     const weekDate = weekStartDate.value ? new Date(weekStartDate.value).toISOString().split('T')[0] : null
@@ -381,6 +390,44 @@ const fetchWeeklyReport = async () => {
   } catch (err) {
     error.value = err.response?.data?.message || '生成报告失败，请稍后重试'
     console.error('生成报告失败:', err)
+  } finally {
+    isGenerating.value = false
+  }
+}
+
+const regenerateReport = async () => {
+  try {
+    isRegenerating.value = true
+    error.value = ''
+    
+    // 计算周开始和结束日期
+    const startDate = new Date(weekStartDate.value)
+    const endDate = new Date(startDate)
+    endDate.setDate(startDate.getDate() + 6)
+    
+    // 准备重新生成报告的数据
+    const reportData = {
+      week_start: startDate.toISOString().split('T')[0],
+      week_end: endDate.toISOString().split('T')[0]
+    }
+    
+    // 调用重新生成报告的API
+    await api.ai.generateReport(reportData)
+    
+    // 重新获取报告
+    await fetchWeeklyReport()
+    
+    // 显示成功消息
+    ElMessage({
+      message: '报告重新生成成功',
+      type: 'success'
+    })
+  } catch (err) {
+    error.value = err.response?.data?.message || '重新生成报告失败，请稍后重试'
+    console.error('重新生成报告失败:', err)
+    ElMessage.error('重新生成报告失败，请稍后重试')
+  } finally {
+    isRegenerating.value = false
   }
 }
 
@@ -419,7 +466,7 @@ const getLearningCoach = async () => {
     // 格式化响应
     let formattedResponse = fullResponse
       .replace(/\n/g, '<br>')
-      .replace(/- (.*?)<br>/g, '<li>$1</li>')
+      .replace(/^- (.*?)<br>/gm, '<li>$1</li>')
       .replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>')
     aiCoachResponse.value = formattedResponse
   } catch (err) {
@@ -640,24 +687,38 @@ onMounted(async () => {
 
 .issue-item,
 .suggestion-item {
-  margin-bottom: 10px;
-  padding-left: 20px;
+  margin-bottom: 12px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
   position: relative;
+  line-height: 1.5;
+  transition: all 0.3s ease;
 }
 
-.issue-item::before,
-.suggestion-item::before {
-  content: '•';
-  position: absolute;
-  left: 0;
-  color: #666;
+.issue-item {
+  border-left: 4px solid #F56C6C;
+}
+
+.suggestion-item {
+  border-left: 4px solid #67C23A;
+}
+
+.issue-item:hover,
+.suggestion-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .no-issues,
 .no-suggestions {
   text-align: center;
   color: #999;
-  padding: 20px 0;
+  padding: 30px 0;
+  font-style: italic;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px dashed #ddd;
 }
 
 .recommended-hours {
@@ -715,24 +776,58 @@ onMounted(async () => {
 
 .response-card {
   min-height: 400px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .ai-content {
   line-height: 1.8;
   white-space: pre-wrap;
+  padding: 30px;
+  font-size: 16px;
+  color: #333;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 8px;
+  margin: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.ai-content h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 20px 0 15px;
+  color: #409EFF;
+  border-bottom: 2px solid #e6f7ff;
+  padding-bottom: 8px;
+}
+
+.ai-content p {
+  margin-bottom: 15px;
+  text-align: justify;
 }
 
 .ai-content ul {
-  margin: 10px 0;
-  padding-left: 20px;
+  margin: 15px 0;
+  padding-left: 25px;
 }
 
 .ai-content li {
-  margin-bottom: 5px;
+  margin-bottom: 10px;
+  position: relative;
+  padding-left: 10px;
+}
+
+.ai-content li::before {
+  content: '•';
+  position: absolute;
+  left: -15px;
+  color: #409EFF;
+  font-weight: bold;
 }
 
 .ai-content br {
-  margin: 5px 0;
+  line-height: 2;
 }
 
 /* AI打卡分析样式 */
@@ -789,23 +884,98 @@ onMounted(async () => {
 
 .insight-item,
 .recommendation-item {
-  margin-bottom: 10px;
-  padding: 10px;
+  margin-bottom: 15px;
+  padding: 20px;
   background-color: #f8f9fa;
+  border-radius: 10px;
+  position: relative;
+  line-height: 1.6;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.insight-item {
   border-left: 4px solid #667eea;
-  border-radius: 4px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf4 100%);
 }
 
 .recommendation-item {
-  border-left-color: #28a745;
+  border-left: 4px solid #28a745;
+  background: linear-gradient(135deg, #f0fff4 0%, #e6f7ee 100%);
+}
+
+.insight-item:hover,
+.recommendation-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.insight-item::before {
+  content: '💡';
+  position: absolute;
+  left: -15px;
+  top: 15px;
+  font-size: 18px;
+  background-color: white;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.recommendation-item::before {
+  content: '✅';
+  position: absolute;
+  left: -15px;
+  top: 15px;
+  font-size: 16px;
+  background-color: white;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .ai-summary-content {
   line-height: 1.8;
   font-size: 16px;
   color: #333;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
+  padding: 30px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+  border-radius: 12px;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  text-align: justify;
+  border-left: 4px solid #667eea;
+}
+
+.ai-summary-content::before {
+  content: '📊';
+  position: absolute;
+  top: -15px;
+  left: 20px;
+  font-size: 24px;
+  background-color: white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ai-summary-content p {
+  margin-bottom: 15px;
+}
+
+.ai-summary-content p:last-child {
+  margin-bottom: 0;
 }
 </style>
