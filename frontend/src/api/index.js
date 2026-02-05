@@ -70,6 +70,7 @@ const api = {
   chatRooms: {
     // 群聊相关API
     createChatRoom: (data) => apiClient.post('/chat-rooms', data),
+    getChatRoom: (id) => apiClient.get(`/chat-rooms/${id}`),
     searchChatRooms: (params) => apiClient.get('/chat-rooms/search', { params }),
     searchByChatId: (chatId) => apiClient.get('/chat-rooms/search-by-id', { params: { chat_id: chatId } }),
     getChatRoomMembers: (id) => apiClient.get(`/chat-rooms/${id}/members`),
@@ -79,7 +80,8 @@ const api = {
   },
   ai: {
     getWeeklyReport: (params) => apiClient.get('/ai/weekly_report', { params }),
-    generateReport: (data) => apiClient.post('/ai/generate_report', data)
+    generateReport: (data) => apiClient.post('/ai/generate_report', data),
+    getLearningCoach: (data) => apiClient.post('/ai/learning_coach', data)
   }
 }
 

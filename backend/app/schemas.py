@@ -254,6 +254,21 @@ class AIReportTaskResponse(BaseModel):
     estimated_time: int
 
 
+class AILearningData(BaseModel):
+    learning_goal: str
+    weekly_total_hours: float
+    average_daily_hours: float
+    target_daily_hours: float
+    consecutive_checkin_days: int
+    missed_checkin_days: int
+
+
+class AILearningCoachResponse(BaseModel):
+    learning_assessment: list
+    next_stage_advice: dict
+    weekly_schedule: list
+
+
 class APIKeyResponse(BaseModel):
     api_key: str
     created_at: datetime

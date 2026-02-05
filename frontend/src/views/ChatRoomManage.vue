@@ -48,17 +48,17 @@
                   </div>
                   
                   <div class="room-actions">
-                    <el-button type="primary" size="small" @click="enterChatRoom(room)">
-                      进入群聊
-                    </el-button>
-                    <el-button size="small" @click="viewJoinRequests(room)" v-if="room.pending_requests > 0">
-                      审批申请
-                      <el-badge :value="room.pending_requests" class="item-badge" />
-                    </el-button>
-                    <el-button size="small" @click="editRoom(room)">
-                      编辑
-                    </el-button>
-                  </div>
+            <el-button type="primary" size="small" @click="enterChatRoom(room)">
+              进入群聊
+            </el-button>
+            <el-button size="small" @click="handleReviewRequests(room)">
+              审批申请
+              <el-badge v-if="room.pending_requests > 0" :value="room.pending_requests" class="item-badge" />
+            </el-button>
+            <el-button size="small" @click="editRoom(room)">
+              编辑
+            </el-button>
+          </div>
                 </el-card>
               </el-col>
             </el-row>
@@ -196,7 +196,16 @@
           <p>{{ currentRequest.message }}</p>
         </div>
         
-        <el-form :model="reviewForm" label-width="80px">
+        <!-- 显示申请状态 -->
+        <div v-if="currentRequest.status && currentRequest.status !== 'pending'" class="request-status">
+          <el-alert
+            :title="currentRequest.status === 'approved' ? '该申请已批准' : '该申请已拒绝'"
+            type="info"
+            show-icon
+          />
+        </div>
+        
+        <el-form :model="reviewForm" label-width="80px" v-if="!currentRequest.status || currentRequest.status === 'pending'">
           <el-form-item label="审批意见">
             <el-input
               v-model="reviewForm.review_message"
@@ -211,8 +220,11 @@
       
       <template #footer>
         <el-button @click="showReviewDialog = false">取消</el-button>
-        <el-button type="danger" @click="submitReview(false)">拒绝</el-button>
-        <el-button type="success" @click="submitReview(true)">批准</el-button>
+        <!-- 只有当请求状态为待审批时才显示审批按钮 -->
+        <template v-if="currentRequest && (!currentRequest.status || currentRequest.status === 'pending')">
+          <el-button type="danger" @click="submitReview(false)">拒绝</el-button>
+          <el-button type="success" @click="submitReview(true)">批准</el-button>
+        </template>
       </template>
     </el-dialog>
   </div>
@@ -302,7 +314,7 @@ const loadChatRooms = async () => {
   try {
     // 获取用户创建和加入的群聊列表
     const response = await api.chatRooms.searchChatRooms({ page: 1, page_size: 100 })
-    const allRooms = response.data.chat_rooms
+    const allRooms = response.data.data?.chat_rooms || []
     
     // 分离创建的群聊和加入的群聊
     createdRooms.value = allRooms.filter(room => room.creator_id === currentUserId.value)
@@ -315,15 +327,45 @@ const loadChatRooms = async () => {
     // 获取每个群聊的待审批请求数量
     for (const room of createdRooms.value) {
       try {
-        const requestsResponse = await api.chatRooms.getJoinRequests(room.chat_room_id, { status: 'pending' })
+        const requestsResponse = await api.chatRooms.getJoinRequests(room.chat_room_id, { status_filter: 'pending' })
         room.pending_requests = requestsResponse.data.length || 0
       } catch (error) {
         room.pending_requests = 0
       }
     }
     
+    // 同样更新管理员群聊的待审批数量
+    for (const room of joinedRooms.value) {
+      if (room.role === 'admin') {
+        try {
+          const requestsResponse = await api.chatRooms.getJoinRequests(room.chat_room_id, { status_filter: 'pending' })
+          room.pending_requests = requestsResponse.data.length || 0
+        } catch (error) {
+          room.pending_requests = 0
+        }
+      } else {
+        room.pending_requests = 0
+      }
+    }
+    
   } catch (error) {
-    ElMessage.error('加载群聊失败：' + (error.response?.data?.detail || error.message))
+    // 优化错误提示信息
+    let errorMessage = '加载群聊失败'
+    if (error.response?.data?.detail) {
+      errorMessage += '：' + error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage += '：' + error.response.data.message
+    } else if (error.message) {
+      errorMessage += '：' + error.message
+    } else if (error.response?.data) {
+      // 处理对象类型的错误信息
+      try {
+        errorMessage += '：' + JSON.stringify(error.response.data)
+      } catch {
+        errorMessage += '：未知错误'
+      }
+    }
+    ElMessage.error(errorMessage)
   } finally {
     loading.value = false
   }
@@ -337,10 +379,16 @@ const loadJoinRequests = async () => {
     const allRequests = []
     
     // 遍历用户管理的群聊，获取每个群聊的加入请求
-    for (const room of createdRooms.value) {
+    // 包括用户创建的群聊和作为管理员的群聊
+    const adminRooms = [
+      ...createdRooms.value,
+      ...joinedRooms.value.filter(room => room.role === 'admin')
+    ]
+    
+    for (const room of adminRooms) {
       try {
         const response = await api.chatRooms.getJoinRequests(room.chat_room_id)
-        const roomRequests = response.data.map(request => ({
+        const roomRequests = (response.data.data?.join_requests || []).map(request => ({
           ...request,
           avatar_url: null // 可以后续添加头像信息
         }))
@@ -352,7 +400,23 @@ const loadJoinRequests = async () => {
     
     joinRequests.value = allRequests
   } catch (error) {
-    ElMessage.error('加载请求失败：' + (error.response?.data?.detail || error.message))
+    // 优化错误提示信息
+    let errorMessage = '加载请求失败'
+    if (error.response?.data?.detail) {
+      errorMessage += '：' + error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage += '：' + error.response.data.message
+    } else if (error.message) {
+      errorMessage += '：' + error.message
+    } else if (error.response?.data) {
+      // 处理对象类型的错误信息
+      try {
+        errorMessage += '：' + JSON.stringify(error.response.data)
+      } catch {
+        errorMessage += '：未知错误'
+      }
+    }
+    ElMessage.error(errorMessage)
   } finally {
     requestsLoading.value = false
   }
@@ -370,6 +434,51 @@ const enterChatRoom = (room) => {
 const viewJoinRequests = (room) => {
   activeTab.value = 'requests'
   loadJoinRequests()
+}
+
+const handleReviewRequests = async (room) => {
+  // 首先检查room.pending_requests是否大于0
+  if (!room.pending_requests || room.pending_requests <= 0) {
+    ElMessage.info('暂无待审批的请求')
+    return
+  }
+  
+  // 切换到审批标签页
+  activeTab.value = 'requests'
+  
+  // 加载该群聊的待审批请求
+  try {
+    const response = await api.chatRooms.getJoinRequests(room.chat_room_id, { status_filter: 'pending' })
+    const pendingRequests = response.data.data?.join_requests || []
+    
+    if (pendingRequests.length > 0) {
+      // 显示第一个待审批请求的弹窗
+      currentRequest.value = pendingRequests[0]
+      showReviewDialog.value = true
+    } else {
+      // 如果API返回为空，更新本地状态
+      room.pending_requests = 0
+      ElMessage.info('暂无待审批的请求')
+    }
+  } catch (error) {
+    // 优化错误提示信息
+    let errorMessage = '加载待审批请求失败'
+    if (error.response?.data?.detail) {
+      errorMessage += '：' + error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage += '：' + error.response.data.message
+    } else if (error.message) {
+      errorMessage += '：' + error.message
+    } else if (error.response?.data) {
+      // 处理对象类型的错误信息
+      try {
+        errorMessage += '：' + JSON.stringify(error.response.data)
+      } catch {
+        errorMessage += '：未知错误'
+      }
+    }
+    ElMessage.error(errorMessage)
+  }
 }
 
 const editRoom = (room) => {
@@ -419,6 +528,13 @@ const submitReview = async (approve) => {
   try {
     if (!currentRequest.value) return
     
+    // 检查请求状态，确保只有待审批的请求才能被处理
+    if (currentRequest.value.status && currentRequest.value.status !== 'pending') {
+      ElMessage.info('该申请已处理，无需重复操作')
+      showReviewDialog.value = false
+      return
+    }
+    
     const data = {
       approve,
       review_message: reviewForm.review_message
@@ -435,15 +551,47 @@ const submitReview = async (approve) => {
     showReviewDialog.value = false
     reviewForm.review_message = ''
     currentRequest.value = null
-    loadJoinRequests()
-    loadChatRooms() // 刷新群聊数据
+    
+    // 先更新审批列表
+    await loadJoinRequests()
+    
+    // 再更新群聊数据，确保 pending_requests 计数正确更新
+    // 这样会触发 el-badge 的 v-if 条件，实现平滑消失
+    await loadChatRooms()
   } catch (error) {
-    ElMessage.error('审批失败：' + (error.response?.data?.detail || error.message))
+    // 优化错误提示信息
+    let errorMessage = '审批失败'
+    if (error.response?.data?.detail) {
+      errorMessage += '：' + error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage += '：' + error.response.data.message
+    } else if (error.message) {
+      errorMessage += '：' + error.message
+    } else if (error.response?.data) {
+      // 处理对象类型的错误信息
+      try {
+        errorMessage += '：' + JSON.stringify(error.response.data)
+      } catch {
+        errorMessage += '：未知错误'
+      }
+    }
+    ElMessage.error(errorMessage)
+    // 错误情况下不重新加载数据，保持 el-badge 显示状态
   }
 }
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
+  // 先获取用户信息
+  if (authStore.isAuthenticated && !authStore.user) {
+    try {
+      await authStore.fetchUserInfo()
+    } catch (error) {
+      console.error('获取用户信息失败:', error)
+    }
+  }
+  
+  // 然后加载群聊列表
   loadChatRooms()
   if (activeTab.value === 'requests') {
     loadJoinRequests()
@@ -550,6 +698,13 @@ onMounted(() => {
 
 .item-badge {
   margin-left: 4px;
+  transition: all 0.3s ease-in-out;
+}
+
+/* 确保过渡动画在元素移除时生效 */
+.el-badge {
+  display: inline-block;
+  transition: all 0.3s ease-in-out;
 }
 
 .requests-header {

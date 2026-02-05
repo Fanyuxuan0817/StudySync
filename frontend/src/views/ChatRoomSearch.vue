@@ -354,9 +354,19 @@ const handleCreateChatRoom = async () => {
     try {
       const response = await api.chatRooms.createChatRoom(createForm)
       ElMessage.success('群聊创建成功！')
-      ElMessage.info(`群聊ID: ${formatChatId(response.data.chat_id)}`)
+      ElMessage.info(`群聊ID: ${formatChatId(response.data.data.chat_id)}`)
       showCreateDialog.value = false
       resetCreateForm()
+      
+      // 刷新用户信息（确保有creator_id用于筛选）
+      if (authStore.isAuthenticated && !authStore.user) {
+        try {
+          await authStore.fetchUserInfo()
+        } catch (error) {
+          console.error('获取用户信息失败:', error)
+        }
+      }
+      
       handleSearch() // 刷新列表
     } catch (error) {
       ElMessage.error('创建失败：' + (error.response?.data?.detail || error.message))

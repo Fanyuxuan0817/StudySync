@@ -16,7 +16,7 @@ from typing import Optional, List
 router = APIRouter(prefix="/chat-rooms", tags=["群聊"])
 
 
-@router.post("", response_model=ChatRoomResponse)
+@router.post("")
 async def create_chat_room(
     chat_room_data: ChatRoomCreate,
     current_user: User = Depends(get_current_user),
@@ -92,23 +92,27 @@ async def create_chat_room(
     db.add(owner_member)
     db.commit()
     
-    return ChatRoomResponse(
-        chat_room_id=new_chat_room.id,
-        chat_id=new_chat_room.chat_id,
-        name=new_chat_room.name,
-        description=new_chat_room.description,
-        avatar_url=new_chat_room.avatar_url,
-        group_id=new_chat_room.group_id,
-        creator_id=new_chat_room.created_by,
-        max_members=new_chat_room.max_members,
-        current_members=1,
-        is_public=new_chat_room.is_public,
-        status=new_chat_room.status,
-        created_at=new_chat_room.created_at
+    from app.schemas import ResponseModel
+    
+    return ResponseModel(
+        data=ChatRoomResponse(
+            chat_room_id=new_chat_room.id,
+            chat_id=new_chat_room.chat_id,
+            name=new_chat_room.name,
+            description=new_chat_room.description,
+            avatar_url=new_chat_room.avatar_url,
+            group_id=new_chat_room.group_id,
+            creator_id=new_chat_room.created_by,
+            max_members=new_chat_room.max_members,
+            current_members=1,
+            is_public=new_chat_room.is_public,
+            status=new_chat_room.status,
+            created_at=new_chat_room.created_at
+        ).model_dump()
     )
 
 
-@router.get("/search", response_model=ChatRoomSearchResponse)
+@router.get("/search")
 async def search_chat_rooms(
     keyword: Optional[str] = Query(None, description="搜索关键词"),
     chat_id: Optional[str] = Query(None, description="群聊ID"),
@@ -187,15 +191,18 @@ async def search_chat_rooms(
             created_at=room.created_at
         ))
     
-    return ChatRoomSearchResponse(
-        chat_rooms=chat_rooms_data,
-        total=total,
-        page=page,
-        page_size=page_size
+    from app.schemas import ResponseModel
+    return ResponseModel(
+        data=ChatRoomSearchResponse(
+            chat_rooms=chat_rooms_data,
+            total=total,
+            page=page,
+            page_size=page_size
+        ).model_dump()
     )
 
 
-@router.get("/search-by-id", response_model=ChatRoomBriefResponse)
+@router.get("/search-by-id")
 async def search_chat_room_by_id(
     chat_id_search: ChatIdSearchRequest = Depends(),
     current_user: User = Depends(get_current_user),
@@ -242,19 +249,80 @@ async def search_chat_room_by_id(
         ChatRoomMember.chat_room_id == chat_room.id
     ).count()
     
-    return ChatRoomBriefResponse(
-        chat_room_id=chat_room.id,
-        chat_id=chat_room.chat_id,
-        name=chat_room.name,
-        description=chat_room.description,
-        avatar_url=chat_room.avatar_url,
-        current_members=current_members,
-        max_members=chat_room.max_members,
-        is_public=chat_room.is_public
+    from app.schemas import ResponseModel
+    return ResponseModel(
+        data=ChatRoomBriefResponse(
+            chat_room_id=chat_room.id,
+            chat_id=chat_room.chat_id,
+            name=chat_room.name,
+            description=chat_room.description,
+            avatar_url=chat_room.avatar_url,
+            current_members=current_members,
+            max_members=chat_room.max_members,
+            is_public=chat_room.is_public
+        ).model_dump()
     )
 
 
-@router.post("/{chat_room_id}/join-request", response_model=ChatRoomJoinRequestResponse)
+@router.get("/{chat_room_id}")
+async def get_chat_room(
+    chat_room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取群聊详情
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.id == chat_room_id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在或已关闭"
+        )
+    
+    # 检查是否是公开群聊或用户已加入
+    is_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id
+    ).first()
+    
+    if not chat_room.is_public and not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="该群聊不对外开放"
+        )
+    
+    # 获取当前成员数
+    current_members = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id
+    ).count()
+    
+    from app.schemas import ResponseModel
+    
+    return ResponseModel(
+        data=ChatRoomResponse(
+            chat_room_id=chat_room.id,
+            chat_id=chat_room.chat_id,
+            name=chat_room.name,
+            description=chat_room.description,
+            avatar_url=chat_room.avatar_url,
+            group_id=chat_room.group_id,
+            creator_id=chat_room.created_by,
+            max_members=chat_room.max_members,
+            current_members=current_members,
+            is_public=chat_room.is_public,
+            status=chat_room.status,
+            created_at=chat_room.created_at
+        ).model_dump()
+    )
+
+
+@router.post("/{chat_room_id}/join-request")
 async def create_join_request(
     chat_room_id: int,
     request_data: ChatRoomJoinRequestCreate,
@@ -323,24 +391,27 @@ async def create_join_request(
     db.commit()
     db.refresh(join_request)
     
-    return ChatRoomJoinRequestResponse(
-        request_id=join_request.id,
-        chat_room_id=join_request.chat_room_id,
-        chat_id=chat_room.chat_id,
-        chat_room_name=chat_room.name,
-        user_id=join_request.user_id,
-        username=current_user.username,
-        status=join_request.status,
-        message=join_request.message,
-        reviewed_by=join_request.reviewed_by,
-        reviewer_name=None,
-        review_message=join_request.review_message,
-        created_at=join_request.created_at,
-        reviewed_at=join_request.reviewed_at
+    from app.schemas import ResponseModel
+    return ResponseModel(
+        data=ChatRoomJoinRequestResponse(
+            request_id=join_request.id,
+            chat_room_id=join_request.chat_room_id,
+            chat_id=chat_room.chat_id,
+            chat_room_name=chat_room.name,
+            user_id=join_request.user_id,
+            username=current_user.username,
+            status=join_request.status,
+            message=join_request.message,
+            reviewed_by=join_request.reviewed_by,
+            reviewer_name=None,
+            review_message=join_request.review_message,
+            created_at=join_request.created_at,
+            reviewed_at=join_request.reviewed_at
+        ).model_dump()
     )
 
 
-@router.get("/{chat_room_id}/join-requests", response_model=List[ChatRoomJoinRequestResponse])
+@router.get("/{chat_room_id}/join-requests")
 async def get_join_requests(
     chat_room_id: int,
     status_filter: Optional[ChatRoomJoinStatus] = Query(None, description="筛选状态"),
@@ -404,10 +475,11 @@ async def get_join_requests(
             reviewed_at=request.reviewed_at
         ))
     
-    return requests_data
+    from app.schemas import ResponseModel
+    return ResponseModel(data={"join_requests": requests_data})
 
 
-@router.post("/{chat_room_id}/join-requests/{request_id}/review", response_model=ChatRoomJoinRequestResponse)
+@router.post("/{chat_room_id}/join-requests/{request_id}/review")
 async def review_join_request(
     chat_room_id: int,
     request_id: int,
@@ -486,24 +558,27 @@ async def review_join_request(
     # 获取用户信息
     user = db.query(User).filter(User.id == join_request.user_id).first()
     
-    return ChatRoomJoinRequestResponse(
-        request_id=join_request.id,
-        chat_room_id=join_request.chat_room_id,
-        chat_id=chat_room.chat_id,
-        chat_room_name=chat_room.name,
-        user_id=join_request.user_id,
-        username=user.username if user else "未知用户",
-        status=join_request.status,
-        message=join_request.message,
-        reviewed_by=join_request.reviewed_by,
-        reviewer_name=current_user.username,
-        review_message=join_request.review_message,
-        created_at=join_request.created_at,
-        reviewed_at=join_request.reviewed_at
+    from app.schemas import ResponseModel
+    return ResponseModel(
+        data=ChatRoomJoinRequestResponse(
+            request_id=join_request.id,
+            chat_room_id=join_request.chat_room_id,
+            chat_id=chat_room.chat_id,
+            chat_room_name=chat_room.name,
+            user_id=join_request.user_id,
+            username=user.username if user else "未知用户",
+            status=join_request.status,
+            message=join_request.message,
+            reviewed_by=join_request.reviewed_by,
+            reviewer_name=current_user.username,
+            review_message=join_request.review_message,
+            created_at=join_request.created_at,
+            reviewed_at=join_request.reviewed_at
+        ).model_dump()
     )
 
 
-@router.get("/{chat_room_id}/members", response_model=ChatRoomMembersResponse)
+@router.get("/{chat_room_id}/members")
 async def get_chat_room_members(
     chat_room_id: int,
     current_user: User = Depends(get_current_user),
@@ -551,10 +626,287 @@ async def get_chat_room_members(
             is_muted=member.is_muted
         ))
     
-    return ChatRoomMembersResponse(
+    from app.schemas import ResponseModel
+    
+    return ResponseModel(
+        data=ChatRoomMembersResponse(
+            chat_room_id=chat_room_id,
+            chat_id=chat_room.chat_id,
+            name=chat_room.name,
+            total_members=len(members_data),
+            members=members_data
+        ).model_dump()
+    )
+    raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="您已发送过加入请求，请等待审批"
+        )
+    
+    # 检查群聊是否已满
+    current_members = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id
+    ).count()
+    
+    if current_members >= chat_room.max_members:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="群聊成员已满"
+        )
+    
+    # 创建加入请求
+    join_request = ChatRoomJoinRequest(
         chat_room_id=chat_room_id,
-        chat_id=chat_room.chat_id,
-        name=chat_room.name,
-        total_members=len(members_data),
-        members=members_data
+        user_id=current_user.id,
+        message=request_data.message,
+        status=ChatRoomJoinStatus.PENDING
+    )
+    db.add(join_request)
+    db.commit()
+    db.refresh(join_request)
+    
+    from app.schemas import ResponseModel
+    return ResponseModel(
+        data=ChatRoomJoinRequestResponse(
+            request_id=join_request.id,
+            chat_room_id=join_request.chat_room_id,
+            chat_id=chat_room.chat_id,
+            chat_room_name=chat_room.name,
+            user_id=join_request.user_id,
+            username=current_user.username,
+            status=join_request.status,
+            message=join_request.message,
+            reviewed_by=join_request.reviewed_by,
+            reviewer_name=None,
+            review_message=join_request.review_message,
+            created_at=join_request.created_at,
+            reviewed_at=join_request.reviewed_at
+        ).model_dump()
+    )
+
+
+@router.get("/{chat_room_id}/join-requests")
+async def get_join_requests(
+    chat_room_id: int,
+    status_filter: Optional[ChatRoomJoinStatus] = Query(None, description="筛选状态"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取群聊加入请求列表（管理员/群主权限）
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(ChatRoom.id == chat_room_id).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在"
+        )
+    
+    # 验证用户权限（管理员或群主）
+    member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id,
+        ChatRoomMember.role.in_(["owner", "admin"])
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主或管理员才能查看加入请求"
+        )
+    
+    # 查询加入请求
+    query = db.query(ChatRoomJoinRequest, User).join(
+        User, ChatRoomJoinRequest.user_id == User.id
+    ).filter(ChatRoomJoinRequest.chat_room_id == chat_room_id)
+    
+    if status_filter:
+        query = query.filter(ChatRoomJoinRequest.status == status_filter)
+    
+    query = query.order_by(ChatRoomJoinRequest.created_at.desc())
+    
+    requests_data = []
+    for request, user in query.all():
+        reviewer_name = None
+        if request.reviewed_by:
+            reviewer = db.query(User).filter(User.id == request.reviewed_by).first()
+            reviewer_name = reviewer.username if reviewer else None
+        
+        requests_data.append(ChatRoomJoinRequestResponse(
+            request_id=request.id,
+            chat_room_id=request.chat_room_id,
+            chat_id=chat_room.chat_id,
+            chat_room_name=chat_room.name,
+            user_id=request.user_id,
+            username=user.username,
+            status=request.status,
+            message=request.message,
+            reviewed_by=request.reviewed_by,
+            reviewer_name=reviewer_name,
+            review_message=request.review_message,
+            created_at=request.created_at,
+            reviewed_at=request.reviewed_at
+        ))
+    
+    from app.schemas import ResponseModel
+    return ResponseModel(data={"join_requests": requests_data})
+
+
+@router.post("/{chat_room_id}/join-requests/{request_id}/review")
+async def review_join_request(
+    chat_room_id: int,
+    request_id: int,
+    review_data: ChatRoomJoinRequestReview,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    审批加入请求（管理员/群主权限）
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(ChatRoom.id == chat_room_id).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在"
+        )
+    
+    # 验证用户权限（管理员或群主）
+    member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id,
+        ChatRoomMember.role.in_(["owner", "admin"])
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主或管理员才能审批加入请求"
+        )
+    
+    # 获取加入请求
+    join_request = db.query(ChatRoomJoinRequest).filter(
+        ChatRoomJoinRequest.id == request_id,
+        ChatRoomJoinRequest.chat_room_id == chat_room_id,
+        ChatRoomJoinRequest.status == ChatRoomJoinStatus.PENDING
+    ).first()
+    
+    if not join_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="加入请求不存在或已处理"
+        )
+    
+    # 检查群聊是否已满（只在批准时检查）
+    if review_data.approve:
+        current_members = db.query(ChatRoomMember).filter(
+            ChatRoomMember.chat_room_id == chat_room_id
+        ).count()
+        
+        if current_members >= chat_room.max_members:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="群聊成员已满"
+            )
+    
+    # 更新请求状态
+    join_request.status = ChatRoomJoinStatus.APPROVED if review_data.approve else ChatRoomJoinStatus.REJECTED
+    join_request.reviewed_by = current_user.id
+    join_request.reviewed_at = func.now()
+    join_request.review_message = review_data.review_message
+    
+    # 如果批准，添加成员
+    if review_data.approve:
+        new_member = ChatRoomMember(
+            chat_room_id=chat_room_id,
+            user_id=join_request.user_id,
+            role="member",
+            last_active_at=func.now()
+        )
+        db.add(new_member)
+    
+    db.commit()
+    db.refresh(join_request)
+    
+    # 获取用户信息
+    user = db.query(User).filter(User.id == join_request.user_id).first()
+    
+    from app.schemas import ResponseModel
+    return ResponseModel(
+        data=ChatRoomJoinRequestResponse(
+            request_id=join_request.id,
+            chat_room_id=join_request.chat_room_id,
+            chat_id=chat_room.chat_id,
+            chat_room_name=chat_room.name,
+            user_id=join_request.user_id,
+            username=user.username if user else "未知用户",
+            status=join_request.status,
+            message=join_request.message,
+            reviewed_by=join_request.reviewed_by,
+            reviewer_name=current_user.username,
+            review_message=join_request.review_message,
+            created_at=join_request.created_at,
+            reviewed_at=join_request.reviewed_at
+        ).model_dump()
+    )
+
+
+@router.get("/{chat_room_id}/members")
+async def get_chat_room_members(
+    chat_room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    获取群聊成员列表
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(ChatRoom.id == chat_room_id).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在"
+        )
+    
+    # 检查用户是否是群聊成员
+    is_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id
+    ).first()
+    
+    if not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群聊成员才能查看成员列表"
+        )
+    
+    # 获取成员列表
+    members_query = db.query(ChatRoomMember, User).join(
+        User, ChatRoomMember.user_id == User.id
+    ).filter(ChatRoomMember.chat_room_id == chat_room_id)
+    
+    members = members_query.all()
+    
+    members_data = []
+    for member, user in members:
+        members_data.append(ChatRoomMemberResponse(
+            user_id=user.id,
+            username=user.username,
+            avatar_url=user.avatar_url,
+            role=member.role,
+            joined_at=member.joined_at,
+            last_active_at=member.last_active_at,
+            is_muted=member.is_muted
+        ))
+    
+    from app.schemas import ResponseModel
+    
+    return ResponseModel(
+        data=ChatRoomMembersResponse(
+            chat_room_id=chat_room_id,
+            chat_id=chat_room.chat_id,
+            name=chat_room.name,
+            total_members=len(members_data),
+            members=members_data
+        ).model_dump()
     )

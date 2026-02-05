@@ -43,7 +43,7 @@ class ChatRoomUpdate(BaseModel):
     avatar_url: Optional[str] = Field(None, description="群聊头像URL")
     max_members: Optional[int] = Field(None, ge=10, le=1000, description="最大成员数")
     is_public: Optional[bool] = Field(None, description="是否公开可搜索")
-    status: Optional[ChatRoomStatus] = Field(None, description="群聊状态")
+    status: Optional[str] = Field(None, description="群聊状态")
 
 
 class ChatRoomResponse(BaseModel):
@@ -58,7 +58,7 @@ class ChatRoomResponse(BaseModel):
     max_members: int
     current_members: int
     is_public: bool
-    status: ChatRoomStatus
+    status: str
     created_at: datetime
     
     class Config:
@@ -86,7 +86,7 @@ class ChatRoomJoinRequestResponse(BaseModel):
     chat_room_name: str
     user_id: int
     username: str
-    status: ChatRoomJoinStatus
+    status: str
     message: Optional[str] = None
     reviewed_by: Optional[int] = None
     reviewer_name: Optional[str] = None
@@ -109,7 +109,7 @@ class ChatRoomMemberResponse(BaseModel):
     user_id: int
     username: str
     avatar_url: Optional[str] = None
-    role: ChatRoomMemberRole
+    role: str
     joined_at: datetime
     last_active_at: Optional[datetime] = None
     is_muted: bool

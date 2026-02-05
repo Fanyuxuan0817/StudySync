@@ -36,18 +36,7 @@ const routes = [
     component: () => import('../views/Checkin.vue'),
     meta: { requiresAuth: true }
   },
-  {
-      path: '/groups',
-      name: 'Groups',
-      component: () => import('../views/Groups.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/groups/:id',
-      name: 'GroupDetail',
-      component: () => import('../views/GroupDetail.vue'),
-      meta: { requiresAuth: true }
-    },
+
   {
     path: '/ai-report',
     name: 'AIReport',
@@ -72,12 +61,7 @@ const routes = [
     component: () => import('../views/ChatRoomDetail.vue'),
     meta: { requiresAuth: true }
   },
-  {
-    path: '/groups/:id/chat',
-    name: 'Chat',
-    component: () => import('../views/Chat.vue'),
-    meta: { requiresAuth: true }
-  }
+
 ]
 
 const router = createRouter({

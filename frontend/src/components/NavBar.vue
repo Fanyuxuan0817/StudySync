@@ -7,7 +7,7 @@
       <div class="navbar-menu">
         <router-link to="/home" class="navbar-item">首页</router-link>
         <router-link to="/checkin" class="navbar-item">打卡</router-link>
-        <router-link to="/groups" class="navbar-item">群组</router-link>
+        <router-link to="/chat-rooms" class="navbar-item">群聊中心</router-link>
         <router-link to="/ai-report" class="navbar-item">AI报告</router-link>
       </div>
       <div class="navbar-user">

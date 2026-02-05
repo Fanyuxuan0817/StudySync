@@ -336,24 +336,25 @@ const enterChatRoom = () => {
 const loadRoomInfo = async () => {
   loading.value = true
   try {
-    // 通过搜索API获取群聊详情
-    const response = await api.chatRooms.searchChatRooms({
-      page: 1,
-      page_size: 1
-    })
-    
-    // 从搜索结果中找到对应的群聊
-    const room = response.data.chat_rooms.find(r => r.chat_room_id === parseInt(route.params.id))
-    
-    if (!room) {
-      ElMessage.error('群聊不存在')
-      router.push('/chat-rooms')
-      return
-    }
-    
-    roomInfo.value = room
+    // 使用专门的群聊详情API
+    const response = await api.chatRooms.getChatRoom(route.params.id)
+    roomInfo.value = response.data.data
   } catch (error) {
-    ElMessage.error('加载群聊信息失败：' + (error.response?.data?.detail || error.message))
+    // 优化错误提示信息
+    let errorMessage = '加载群聊信息失败'
+    if (error.response?.status === 404) {
+      errorMessage = '抱歉，该群聊不存在或已关闭'
+    } else if (error.response?.status === 403) {
+      errorMessage = '抱歉，该群聊不对外开放'
+    } else if (error.response?.data?.detail) {
+      errorMessage += '：' + error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage += '：' + error.response.data.message
+    } else if (error.message) {
+      errorMessage += '：' + error.message
+    }
+    ElMessage.error(errorMessage)
+    router.push('/chat-rooms')
   } finally {
     loading.value = false
   }
@@ -362,9 +363,25 @@ const loadRoomInfo = async () => {
 const loadMembers = async () => {
   try {
     const response = await api.chatRooms.getChatRoomMembers(route.params.id)
-    members.value = response.data.members
+    members.value = response.data.data.members
   } catch (error) {
-    ElMessage.error('加载成员列表失败：' + (error.response?.data?.detail || error.message))
+    // 优化错误提示信息
+    let errorMessage = '加载成员列表失败'
+    if (error.response?.data?.detail) {
+      errorMessage += '：' + error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage += '：' + error.response.data.message
+    } else if (error.message) {
+      errorMessage += '：' + error.message
+    } else if (error.response?.data) {
+      // 处理对象类型的错误信息
+      try {
+        errorMessage += '：' + JSON.stringify(error.response.data)
+      } catch {
+        errorMessage += '：未知错误'
+      }
+    }
+    ElMessage.error(errorMessage)
   }
 }
 
@@ -372,9 +389,32 @@ const loadJoinRequests = async () => {
   try {
     // 获取所有状态的加入请求
     const response = await api.chatRooms.getJoinRequests(route.params.id)
-    joinRequests.value = response.data
+    // 检查响应格式，适应可能的变化
+    if (response.data.data?.join_requests) {
+      joinRequests.value = response.data.data.join_requests
+    } else if (response.data.data) {
+      joinRequests.value = response.data.data
+    } else if (response.data) {
+      joinRequests.value = response.data
+    }
   } catch (error) {
-    ElMessage.error('加载申请历史失败：' + (error.response?.data?.detail || error.message))
+    // 优化错误提示信息
+    let errorMessage = '加载申请历史失败'
+    if (error.response?.data?.detail) {
+      errorMessage += '：' + error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage += '：' + error.response.data.message
+    } else if (error.message) {
+      errorMessage += '：' + error.message
+    } else if (error.response?.data) {
+      // 处理对象类型的错误信息
+      try {
+        errorMessage += '：' + JSON.stringify(error.response.data)
+      } catch {
+        errorMessage += '：未知错误'
+      }
+    }
+    ElMessage.error(errorMessage)
   }
 }
 
@@ -383,7 +423,7 @@ const checkMembership = async () => {
     // 通过获取成员列表来检查当前用户是否是成员
     const response = await api.chatRooms.getChatRoomMembers(route.params.id)
     
-    const currentUserMember = response.data.members.find(member => member.user_id === currentUserId.value)
+    const currentUserMember = response.data.data.members.find(member => member.user_id === currentUserId.value)
     
     if (currentUserMember) {
       isMember.value = true

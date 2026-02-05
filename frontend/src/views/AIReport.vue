@@ -130,7 +130,56 @@
           :title="error"
           show-icon
           class="error-alert"
-        />
+        /></div>
+      </el-card>
+    </div>
+    
+    <!-- AI学习教练 -->
+    <div class="ai-coach-card">
+      <el-card :body-style="{ padding: '30px' }">
+        <h2 class="card-title">AI学习教练</h2>
+        
+        <div class="learning-data-form">
+          <el-form label-width="120px" class="data-form">
+            <el-form-item label="学习目标">
+              <el-input v-model="learningData.learning_goal" placeholder="例如：考研数学" />
+            </el-form-item>
+            <el-form-item label="本周总学习时长">
+              <el-input-number v-model="learningData.weekly_total_hours" :min="0" :step="0.5" placeholder="小时" />
+            </el-form-item>
+            <el-form-item label="平均每日学习时长">
+              <el-input-number v-model="learningData.average_daily_hours" :min="0" :step="0.5" placeholder="小时" />
+            </el-form-item>
+            <el-form-item label="目标每日学习时长">
+              <el-input-number v-model="learningData.target_daily_hours" :min="0" :step="0.5" placeholder="小时" />
+            </el-form-item>
+            <el-form-item label="连续打卡天数">
+              <el-input-number v-model="learningData.consecutive_checkin_days" :min="0" :step="1" placeholder="天" />
+            </el-form-item>
+            <el-form-item label="漏打卡天数">
+              <el-input-number v-model="learningData.missed_checkin_days" :min="0" :step="1" placeholder="天" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="getLearningCoach" :loading="isLoading">
+                获取学习指导
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+        
+        <div v-if="aiCoachResponse" class="coach-response">
+          <el-card :body-style="{ padding: '20px' }" class="response-card">
+            <div v-html="aiCoachResponse" class="ai-content"></div>
+          </el-card>
+        </div>
+        <div v-else-if="coachError" class="loading-coach">
+          <el-alert
+            type="error"
+            :title="coachError"
+            show-icon
+            class="error-alert"
+          />
+        </div>
       </el-card>
     </div>
   </div>
@@ -146,6 +195,19 @@ const weekStartDate = ref(new Date())
 const weeklyReport = ref(null)
 const error = ref('')
 
+// AI学习教练相关
+const learningData = ref({
+  learning_goal: '考研数学',
+  weekly_total_hours: 12,
+  average_daily_hours: 1.7,
+  target_daily_hours: 3,
+  consecutive_checkin_days: 3,
+  missed_checkin_days: 2
+})
+const aiCoachResponse = ref(null)
+const coachError = ref('')
+const isLoading = ref(false)
+
 // 方法
 const fetchWeeklyReport = async () => {
   try {
@@ -157,6 +219,25 @@ const fetchWeeklyReport = async () => {
   } catch (err) {
     error.value = err.response?.data?.message || '生成报告失败，请稍后重试'
     console.error('生成报告失败:', err)
+  }
+}
+
+const getLearningCoach = async () => {
+  try {
+    isLoading.value = true
+    coachError.value = ''
+    const response = await api.ai.getLearningCoach(learningData.value)
+    // 将AI响应转换为HTML格式，保留换行和列表
+    let formattedResponse = response.data.data.ai_response
+      .replace(/\n/g, '<br>')
+      .replace(/- (.*?)<br>/g, '<li>$1</li>')
+      .replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>')
+    aiCoachResponse.value = formattedResponse
+  } catch (err) {
+    coachError.value = err.response?.data?.message || '获取学习指导失败，请稍后重试'
+    console.error('获取学习指导失败:', err)
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -346,5 +427,44 @@ onMounted(async () => {
   .issues-suggestions {
     flex-direction: column;
   }
+}
+
+/* AI学习教练样式 */
+.ai-coach-card {
+  margin-top: 30px;
+}
+
+.learning-data-form {
+  margin-bottom: 30px;
+}
+
+.data-form {
+  max-width: 600px;
+}
+
+.coach-response {
+  margin-top: 30px;
+}
+
+.response-card {
+  min-height: 400px;
+}
+
+.ai-content {
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.ai-content ul {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+.ai-content li {
+  margin-bottom: 5px;
+}
+
+.ai-content br {
+  margin: 5px 0;
 }
 </style>
