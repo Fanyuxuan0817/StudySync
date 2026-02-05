@@ -105,8 +105,8 @@
           </div>
           
           <div class="members-list">
-            <div 
-              v-for="member in filteredMembers" 
+            <div
+              v-for="member in filteredMembers"
               :key="member.user_id"
               class="member-item"
             >
@@ -128,6 +128,34 @@
                 <div class="last-active" v-if="member.last_active_at">
                   最后活跃：{{ formatDate(member.last_active_at) }}
                 </div>
+              </div>
+              <!-- 成员操作按钮（仅群主/管理员可见，且不能操作自己） -->
+              <div class="member-actions" v-if="canManageMember(member)">
+                <!-- 群主可以设置/取消管理员 -->
+                <el-button
+                  v-if="isOwner && member.role === 'member'"
+                  size="small"
+                  type="primary"
+                  @click="setAdmin(member)"
+                >
+                  设为管理员
+                </el-button>
+                <el-button
+                  v-if="isOwner && member.role === 'admin'"
+                  size="small"
+                  @click="cancelAdmin(member)"
+                >
+                  取消管理员
+                </el-button>
+                <!-- 群主可以踢出任何人，管理员只能踢出普通成员 -->
+                <el-button
+                  v-if="canKickMember(member)"
+                  size="small"
+                  type="danger"
+                  @click="kickMember(member)"
+                >
+                  踢出
+                </el-button>
               </div>
             </div>
           </div>
@@ -217,7 +245,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/store/modules/auth'
 import api from '@/api'
 
@@ -239,6 +267,7 @@ const members = ref([])
 const joinRequests = ref([])
 const isMember = ref(false)
 const isAdmin = ref(false)
+const isOwner = ref(false)
 
 // 标签页状态
 const activeTab = ref('info')
@@ -267,6 +296,23 @@ const filteredRequests = computed(() => {
   if (requestStatus.value === 'all') return joinRequests.value
   return joinRequests.value.filter(request => request.status === requestStatus.value)
 })
+
+// 成员管理权限检查
+const canManageMember = (member) => {
+  // 不能管理自己
+  if (member.user_id === currentUserId.value) return false
+  // 必须是管理员或群主
+  if (!isAdmin.value && !isOwner.value) return false
+  return true
+}
+
+const canKickMember = (member) => {
+  // 群主可以踢出任何人（除了自己）
+  if (isOwner.value) return true
+  // 管理员只能踢出普通成员
+  if (isAdmin.value && member.role === 'member') return true
+  return false
+}
 
 // 格式化函数
 const formatChatId = (chatId) => {
@@ -336,9 +382,13 @@ const goToGroup = (groupId) => {
 }
 
 const enterChatRoom = () => {
+  // 导航到 ChatSession 页面，并传递 room_id 参数以自动选中该群聊
   router.push({
-    path: `/chat/${roomInfo.value.group_info?.group_id || route.params.id}`,
-    query: { name: roomInfo.value.name }
+    path: '/chat-session',
+    query: { 
+      room_id: roomInfo.value.room_id,
+      name: roomInfo.value.name 
+    }
   })
 }
 
@@ -437,9 +487,11 @@ const checkMembership = async () => {
     
     if (currentUserMember) {
       isMember.value = true
+      isOwner.value = currentUserMember.role === 'owner'
       isAdmin.value = currentUserMember.role === 'owner' || currentUserMember.role === 'admin'
     } else {
       isMember.value = false
+      isOwner.value = false
       isAdmin.value = false
     }
   } catch (error) {
@@ -452,15 +504,10 @@ const checkMembership = async () => {
 
 // 提交加入申请
 const submitJoinRequest = async () => {
-  if (!joinForm.message.trim()) {
-    ElMessage.warning('请输入申请理由')
-    return
-  }
-  
   joinLoading.value = true
   try {
     await api.chatRooms.createJoinRequest(route.params.id, {
-      message: joinForm.message.trim()
+      message: joinForm.message.trim() || ''
     })
     ElMessage.success('加入申请已提交，请等待审批')
     showJoinDialog.value = false
@@ -469,6 +516,70 @@ const submitJoinRequest = async () => {
     ElMessage.error('提交申请失败：' + (error.response?.data?.detail || error.message))
   } finally {
     joinLoading.value = false
+  }
+}
+
+// 成员管理方法
+const setAdmin = async (member) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将 "${member.username}" 设为管理员吗？`,
+      '设置管理员',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await api.chatRooms.updateMemberRole(route.params.id, member.user_id, 'admin')
+    ElMessage.success('设置管理员成功')
+    await loadMembers()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('设置管理员失败：' + (error.response?.data?.detail || error.message))
+    }
+  }
+}
+
+const cancelAdmin = async (member) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要取消 "${member.username}" 的管理员权限吗？`,
+      '取消管理员',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await api.chatRooms.updateMemberRole(route.params.id, member.user_id, 'member')
+    ElMessage.success('取消管理员成功')
+    await loadMembers()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('取消管理员失败：' + (error.response?.data?.detail || error.message))
+    }
+  }
+}
+
+const kickMember = async (member) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将 "${member.username}" 踢出群聊吗？`,
+      '踢出成员',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'danger'
+      }
+    )
+    await api.chatRooms.removeMember(route.params.id, member.user_id)
+    ElMessage.success('踢出成员成功')
+    await loadMembers()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('踢出成员失败：' + (error.response?.data?.detail || error.message))
+    }
   }
 }
 
@@ -643,6 +754,12 @@ onMounted(async () => {
 
 .join-time, .last-active {
   margin-bottom: 2px;
+}
+
+.member-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 12px;
 }
 
 .requests-section {

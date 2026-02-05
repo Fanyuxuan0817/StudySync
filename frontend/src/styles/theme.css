@@ -323,3 +323,32 @@ body {
   border-color: var(--ss-primary-light);
   box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.1);
 }
+
+/* ===== Element Plus Message 弹窗样式 - 字体白色 ===== */
+.el-message {
+  --el-message-text-color: #ffffff !important;
+}
+
+.el-message__content {
+  color: #ffffff !important;
+}
+
+/* 确保所有类型的 message 都使用白色字体 */
+.el-message--info .el-message__content,
+.el-message--success .el-message__content,
+.el-message--warning .el-message__content,
+.el-message--error .el-message__content {
+  color: #ffffff !important;
+}
+
+/* 图标也使用白色 */
+.el-message .el-message__icon {
+  color: #ffffff !important;
+}
+
+.el-message--info .el-message__icon,
+.el-message--success .el-message__icon,
+.el-message--warning .el-message__icon,
+.el-message--error .el-message__icon {
+  color: #ffffff !important;
+}

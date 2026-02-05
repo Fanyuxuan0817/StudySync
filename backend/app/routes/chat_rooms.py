@@ -679,17 +679,28 @@ async def create_join_request(
         )
     
     # 检查是否已有待处理的申请
-    existing_request = db.query(ChatRoomJoinRequest).filter(
+    existing_pending_request = db.query(ChatRoomJoinRequest).filter(
         ChatRoomJoinRequest.chat_room_id == chat_room_id,
         ChatRoomJoinRequest.user_id == current_user.id,
         ChatRoomJoinRequest.status == ChatRoomJoinStatus.PENDING
     ).first()
     
-    if existing_request:
+    if existing_pending_request:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="您已发送过加入请求，请等待审批"
         )
+    
+    # 检查是否有已处理（approved/rejected/cancelled）的申请，如果有则删除旧记录
+    existing_old_request = db.query(ChatRoomJoinRequest).filter(
+        ChatRoomJoinRequest.chat_room_id == chat_room_id,
+        ChatRoomJoinRequest.user_id == current_user.id,
+        ChatRoomJoinRequest.status.in_([ChatRoomJoinStatus.APPROVED, ChatRoomJoinStatus.REJECTED, ChatRoomJoinStatus.CANCELLED])
+    ).first()
+    
+    if existing_old_request:
+        db.delete(existing_old_request)
+        db.commit()
     
     # 检查群聊是否已满
     current_members = db.query(func.count(ChatRoomMember.id)).filter(
@@ -959,5 +970,173 @@ async def get_chat_room_members(
             members=members_data
         ).model_dump()
     )
+
+
+@router.delete("/{chat_room_id}/members/{user_id}")
+async def remove_chat_room_member(
+    chat_room_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    踢出群聊成员（群主/管理员权限）
+    
+    权限规则：
+    - 群主可以踢出管理员和普通成员
+    - 管理员可以踢出普通成员
+    - 不能踢出群主
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.id == chat_room_id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在或已关闭"
+        )
+    
+    # 获取当前用户的成员信息
+    current_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id
+    ).first()
+    
+    if not current_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您不在该群聊中"
+        )
+    
+    # 获取目标成员信息
+    target_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == user_id
+    ).first()
+    
+    if not target_member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="该成员不在群聊中"
+        )
+    
+    # 不能踢出自己
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能踢出自己"
+        )
+    
+    # 权限检查
+    if current_member.role == "owner":
+        # 群主可以踢出任何人（除了自己）
+        pass
+    elif current_member.role == "admin":
+        # 管理员只能踢出普通成员
+        if target_member.role in ["owner", "admin"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="管理员不能踢出群主或其他管理员"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主或管理员才能踢出成员"
+        )
+    
+    # 删除成员记录
+    db.delete(target_member)
+    db.commit()
+    
+    from app.schemas import ResponseModel
+    return ResponseModel(data={"message": "已成功踢出成员"})
+
+
+@router.put("/{chat_room_id}/members/{user_id}/role")
+async def update_member_role(
+    chat_room_id: int,
+    user_id: int,
+    role_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    更新群聊成员角色（仅群主可操作）
+    
+    支持的操作：
+    - 设置管理员：将普通成员设为管理员
+    - 取消管理员：将管理员设为普通成员
+    - 转让群主：将群主身份转让给其他成员
+    """
+    # 验证群聊存在
+    chat_room = db.query(ChatRoom).filter(
+        ChatRoom.id == chat_room_id,
+        ChatRoom.status == ChatRoomStatus.ACTIVE
+    ).first()
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="群聊不存在或已关闭"
+        )
+    
+    # 验证当前用户是群主
+    current_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == current_user.id,
+        ChatRoomMember.role == "owner"
+    ).first()
+    
+    if not current_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有群主才能更改成员角色"
+        )
+    
+    # 不能修改自己的角色（除了转让群主）
+    new_role = role_data.get("role")
+    if user_id == current_user.id and new_role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能降低自己的角色，如需转让群主请使用转让功能"
+        )
+    
+    # 获取目标成员
+    target_member = db.query(ChatRoomMember).filter(
+        ChatRoomMember.chat_room_id == chat_room_id,
+        ChatRoomMember.user_id == user_id
+    ).first()
+    
+    if not target_member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="该成员不在群聊中"
+        )
+    
+    # 验证角色值
+    if new_role not in ["owner", "admin", "member"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的角色值"
+        )
+    
+    # 如果设置为群主（转让群主）
+    if new_role == "owner":
+        # 将当前群主设为普通成员
+        current_member.role = "member"
+        # 将目标成员设为群主
+        target_member.role = "owner"
+        # 更新群聊创建者
+        chat_room.created_by = user_id
+    else:
+        # 普通角色变更
+        target_member.role = new_role
+    
+    db.commit()
+    
+    from app.schemas import ResponseModel
+    role_text = {"owner": "群主", "admin": "管理员", "member": "普通成员"}.get(new_role, new_role)
+    return ResponseModel(data={"message": f"已成功设置该成员为{role_text}"})
 
 

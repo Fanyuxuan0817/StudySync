@@ -81,9 +81,9 @@ class ChatRoomJoinRequest(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
-    # 联合索引，防止重复申请
+    # 联合索引，一个用户对一个群聊只能有一个待处理的申请
     __table_args__ = (
-        Index('idx_user_chat_room', 'user_id', 'chat_room_id', unique=True),
+        Index('idx_user_chat_room_status', 'user_id', 'chat_room_id', 'status', unique=True),
     )
     
     # 关联
