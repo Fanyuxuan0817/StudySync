@@ -272,3 +272,46 @@ class AILearningCoachResponse(BaseModel):
 class APIKeyResponse(BaseModel):
     api_key: str
     created_at: datetime
+
+
+class AICheckinAnalysisRequest(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    analysis_type: str = Field(default="comprehensive", pattern="^(comprehensive|pattern|anomaly)$")
+
+
+class AICheckinPattern(BaseModel):
+    pattern_type: str
+    description: str
+    frequency: float
+    confidence: float
+
+
+class AICheckinAnomaly(BaseModel):
+    date: date
+    type: str
+    description: str
+    severity: str
+
+
+class AICheckinStats(BaseModel):
+    total_checkins: int
+    total_hours: float
+    avg_daily_hours: float
+    checkin_rate: float
+    on_time_rate: float
+    streak_days: int
+    max_streak: int
+    missed_days: int
+    late_days: int
+    early_days: int
+
+
+class AICheckinAnalysisResponse(BaseModel):
+    period: str
+    stats: AICheckinStats
+    patterns: List[AICheckinPattern]
+    anomalies: List[AICheckinAnomaly]
+    insights: List[str]
+    recommendations: List[str]
+    ai_summary: str

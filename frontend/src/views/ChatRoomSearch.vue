@@ -31,22 +31,47 @@
             搜索
           </el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button @click="debugSearch" type="info" size="small">
+            调试搜索
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <div class="search-results" v-loading="loading">
-      <div v-if="chatRooms.length === 0" class="no-results">
+      <!-- 骨架屏 -->
+      <div v-if="showSkeleton && chatRooms.length === 0" class="skeleton-container">
+        <el-row :gutter="20">
+          <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="i in 8" :key="i">
+            <el-card class="chat-room-card" shadow="never">
+              <template #body>
+                <el-skeleton :rows="4" animated />
+              </template>
+            </el-card>
+          </el-col>
+        </el-row>
+      </div>
+      
+      <div v-if="chatRooms.length === 0 && !showSkeleton" class="no-results">
         <el-empty description="暂无搜索结果" />
       </div>
       <div v-else>
+        <div v-if="chatRooms.length > 100" class="performance-notice">
+          <el-alert
+            title="数据量较大"
+            type="info"
+            description="当前显示 {{ chatRooms.length }} 条群聊，建议使用搜索功能筛选"
+            show-icon
+            :closable="false"
+          />
+        </div>
         <el-row :gutter="20">
           <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="room in chatRooms" :key="room.chat_room_id">
             <el-card class="chat-room-card" shadow="hover">
               <div class="room-header">
                 <div class="room-avatar">
                   <el-avatar :size="50" :src="room.avatar_url || defaultAvatar">
-                    {{ room.name.charAt(0) }}
+                    {{ room.name?.charAt(0) || '群' }}
                   </el-avatar>
                 </div>
                 <div class="room-info">
@@ -195,7 +220,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search, Plus, User } from '@element-plus/icons-vue'
@@ -208,11 +233,28 @@ const authStore = useAuthStore()
 // 默认头像
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
 
+// 搜索防抖
+let searchTimeout = null
+
 // 搜索表单
 const searchForm = reactive({
   chatId: '',
   keyword: ''
 })
+
+// 监听搜索表单变化，实现防抖搜索
+watch([() => searchForm.chatId, () => searchForm.keyword], () => {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    if (searchForm.chatId || searchForm.keyword) {
+      console.log('[防抖搜索] 表单变化触发搜索')
+      handleSearch()
+    }
+  }, 500) // 500ms防抖
+})
+
+// 搜索完成回调
+const emit = defineEmits(['search-complete', 'search-error'])
 
 // 搜索结果
 const chatRooms = ref([])
@@ -220,6 +262,18 @@ const loading = ref(false)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = 20
+
+// 骨架屏显示控制
+const showSkeleton = ref(false)
+const skeletonDelay = 200 // 200ms后开始显示骨架屏
+
+// 加载状态监控
+const loadStats = ref({
+  attemptCount: 0,
+  lastError: null,
+  avgLoadTime: 0,
+  successCount: 0
+})
 
 // 创建群聊
 const showCreateDialog = ref(false)
@@ -251,24 +305,34 @@ const joinForm = reactive({
   message: ''
 })
 
-// 格式化群聊ID显示
+// 格式化群聊ID显示（优化性能）
 const formatChatId = (chatId) => {
   if (!chatId || chatId.length <= 4) return chatId
   
-  // 每3位添加分隔符
-  let formatted = ''
-  for (let i = 0; i < chatId.length; i++) {
-    if (i > 0 && i % 3 === 0) {
-      formatted += '-'
-    }
-    formatted += chatId[i]
-  }
-  return formatted
+  // 使用更高效的字符串处理方法
+  return chatId.replace(/(\d{3})(?=\d)/g, '$1-')
 }
 
 // 搜索群聊
-const handleSearch = async () => {
+const handleSearch = async (retryCount = 0) => {
+  const startTime = Date.now()
   loading.value = true
+  loadStats.value.attemptCount++
+  
+  // 延迟显示骨架屏，避免闪烁
+  const skeletonTimer = setTimeout(() => {
+    showSkeleton.value = true
+  }, skeletonDelay)
+  
+  // 详细调试信息
+  console.log(`[搜索开始] 参数:`, {
+    chatId: searchForm.chatId,
+    keyword: searchForm.keyword,
+    page: currentPage.value,
+    pageSize: pageSize,
+    retryCount: retryCount
+  })
+  
   try {
     const params = {
       page: currentPage.value,
@@ -293,19 +357,109 @@ const handleSearch = async () => {
     } else if (searchForm.keyword) {
       // 使用关键词模糊搜索
       params.keyword = searchForm.keyword
+      console.log(`[API请求] 关键词搜索参数:`, params)
       const response = await api.chatRooms.searchChatRooms(params)
-      chatRooms.value = response.data.chat_rooms
-      total.value = response.data.total
+      console.log(`[API响应] 关键词搜索结果:`, response)
+      // 增强数据完整性验证
+      chatRooms.value = response.data?.chat_rooms || []
+      total.value = response.data?.total || 0
+      
+      // 更新成功统计
+      loadStats.value.successCount++
+      loadStats.value.lastError = null
+      
+      // 详细调试信息
+      console.log(`[搜索成功] 结果:`, {
+        dataCount: chatRooms.value.length,
+        totalCount: total.value,
+        responseData: response.data,
+        loadTime: Date.now() - startTime + 'ms'
+      })
+      
+      // 数据验证
+      if (chatRooms.value.length === 0 && total.value > 0) {
+        console.warn('[数据异常] 总计数大于0但实际数据为空')
+      }
+      
+      // 触发搜索完成事件
+      emit('search-complete', {
+        results: chatRooms.value,
+        total: total.value,
+        loadTime: Date.now() - startTime,
+        stats: loadStats.value
+      })
     } else {
       // 获取公开群聊列表
+      console.log(`[API请求] 公开群聊列表参数:`, params)
       const response = await api.chatRooms.searchChatRooms(params)
-      chatRooms.value = response.data.chat_rooms
-      total.value = response.data.total
+      console.log(`[API响应] 公开群聊列表结果:`, response)
+      // 增强数据完整性验证
+      chatRooms.value = response.data?.chat_rooms || []
+      total.value = response.data?.total || 0
     }
   } catch (error) {
-    ElMessage.error('搜索失败：' + (error.response?.data?.detail || error.message))
+    // 确保即使出错也清空结果，避免显示旧数据
+    chatRooms.value = []
+    total.value = 0
+    
+    // 网络超时错误
+    if (error.code === 'ECONNABORTED') {
+      console.error(`[网络超时] 错误详情:`, error)
+      if (retryCount < 2) {
+        ElMessage.warning(`搜索超时，正在重试(${retryCount + 1}/2)...`)
+        setTimeout(() => {
+          handleSearch(retryCount + 1)
+        }, 1000)
+        return
+      } else {
+        ElMessage.error('搜索超时，请检查网络连接后重试')
+        return
+      }
+    }
+    
+    // 网络连接错误
+    if (error.message.includes('Network Error')) {
+      console.error(`[网络错误] 详细信息:`, error)
+      if (retryCount < 2) {
+        ElMessage.warning(`网络连接失败，正在重试(${retryCount + 1}/2)...`)
+        setTimeout(() => {
+          handleSearch(retryCount + 1)
+        }, 1000)
+        return
+      } else {
+        ElMessage.error('网络连接失败，请检查网络设置后重试')
+        return
+      }
+    }
+    
+    // 服务器错误
+    if (error.response?.status >= 500) {
+      ElMessage.error('服务器繁忙，请稍后再试')
+      return
+    }
+    
+    // 其他错误
+    const errorMessage = error.response?.data?.detail || error.message
+    ElMessage.error('搜索失败：' + errorMessage)
+    loadStats.value.lastError = errorMessage
+    
+    // 触发搜索错误事件
+    emit('search-error', {
+      error: errorMessage,
+      stats: loadStats.value,
+      retryCount: retryCount
+    })
   } finally {
+    clearTimeout(skeletonTimer)
+    showSkeleton.value = false
     loading.value = false
+    const loadTime = Date.now() - startTime
+    if (loadTime > 3000) {
+      console.warn(`群聊搜索加载耗时: ${loadTime}ms，建议优化`)
+    }
+    // 更新平均加载时间
+    const totalTime = loadStats.value.avgLoadTime * (loadStats.value.attemptCount - 1) + loadTime
+    loadStats.value.avgLoadTime = totalTime / loadStats.value.attemptCount
   }
 }
 
@@ -436,10 +590,40 @@ const viewRoomDetails = (room) => {
   router.push(`/chat-rooms/${room.chat_room_id}`)
 }
 
+// 调试搜索功能
+const debugSearch = () => {
+  console.log('=== 群聊搜索调试信息 ===')
+  console.log('当前搜索状态:', {
+    chatId: searchForm.chatId,
+    keyword: searchForm.keyword,
+    loading: loading.value,
+    chatRoomsCount: chatRooms.value.length,
+    total: total.value,
+    currentPage: currentPage.value
+  })
+  console.log('加载统计:', loadStats.value)
+  console.log('用户群组:', userGroups.value)
+  
+  // 手动触发搜索
+  console.log('手动触发搜索...')
+  handleSearch().then(() => {
+    console.log('搜索完成，当前结果:', {
+      chatRoomsCount: chatRooms.value.length,
+      total: total.value,
+      results: chatRooms.value
+    })
+  })
+}
+
 // 初始化
 onMounted(async () => {
-  await loadUserGroups()
-  handleSearch()
+  // 并行加载，避免阻塞
+  Promise.all([
+    loadUserGroups(),
+    handleSearch()
+  ]).catch(error => {
+    console.error('初始化加载失败:', error)
+  })
 })
 </script>
 
@@ -583,5 +767,42 @@ onMounted(async () => {
   .room-actions {
     flex-direction: column;
   }
+}
+
+/* 性能优化样式 */
+.virtual-scroll-container {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.scroll-hint {
+  background: #f0f9ff;
+  border: 1px solid #91d5ff;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  color: #1890ff;
+  font-size: 14px;
+}
+
+.performance-notice {
+  margin-bottom: 16px;
+}
+
+.skeleton-container {
+  padding: 20px 0;
+}
+
+/* 卡片渲染优化 */
+.chat-room-card {
+  contain: layout style;
+  will-change: transform;
+}
+
+/* 减少重排重绘 */
+.room-header,
+.room-stats,
+.room-actions {
+  contain: layout;
 }
 </style>

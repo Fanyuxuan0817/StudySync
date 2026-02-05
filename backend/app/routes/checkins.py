@@ -161,7 +161,7 @@ async def get_today_checkins(
 
 @router.get("/stats", response_model=ResponseModel)
 async def get_checkin_stats(
-    period: str = Query("week", regex="^(week|month|year)$"),
+    period: str = Query("week", pattern="^(week|month|year)$"),
     plan_id: Optional[int] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)

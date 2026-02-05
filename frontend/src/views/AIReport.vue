@@ -130,7 +130,7 @@
           :title="error"
           show-icon
           class="error-alert"
-        /></div>
+        ></el-alert>
       </el-card>
     </div>
     
@@ -182,6 +182,158 @@
         </div>
       </el-card>
     </div>
+    
+    <!-- AI打卡分析 -->
+    <div class="ai-checkin-analysis-card">
+      <el-card :body-style="{ padding: '30px' }">
+        <h2 class="card-title">AI打卡分析</h2>
+        
+        <el-alert
+          title="使用说明"
+          description="选择分析日期范围，系统将自动分析您的打卡记录，识别学习模式和异常情况，并提供个性化的改进建议。"
+          type="info"
+          show-icon
+          style="margin-bottom: 20px;"
+        />
+        
+        <div class="analysis-controls">
+          <el-form :inline="true" class="analysis-form">
+            <el-form-item label="开始日期">
+              <el-date-picker
+                v-model="analysisStartDate"
+                type="date"
+                placeholder="选择开始日期"
+              />
+            </el-form-item>
+            <el-form-item label="结束日期">
+              <el-date-picker
+                v-model="analysisEndDate"
+                type="date"
+                placeholder="选择结束日期"
+              />
+            </el-form-item>
+            <el-form-item label="分析类型">
+              <el-select v-model="analysisType" placeholder="选择分析类型">
+                <el-option label="综合分析" value="comprehensive" />
+                <el-option label="规律分析" value="pattern" />
+                <el-option label="异常分析" value="anomaly" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="getCheckinAnalysis" :loading="isAnalysisLoading">
+                开始分析
+              </el-button>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="info" @click="testApiConnection">
+                测试连接
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+        
+        <div v-if="checkinAnalysis" class="analysis-results">
+          <el-alert
+            v-if="checkinAnalysis.stats.total_checkins === 0"
+            title="暂无打卡数据"
+            description="您选择的日期范围内没有打卡记录，请调整日期范围或开始打卡后再进行分析。"
+            type="info"
+            show-icon
+            style="margin-bottom: 20px;"
+          />
+          <!-- 统计概览 -->
+          <div class="stats-overview">
+            <h3 class="section-title">打卡统计概览</h3>
+            <el-row :gutter="20">
+              <el-col :span="6">
+                <el-card class="stat-card">
+                  <div class="stat-value">{{ checkinAnalysis.stats.total_checkins }}</div>
+                  <div class="stat-label">总打卡次数</div>
+                </el-card>
+              </el-col>
+              <el-col :span="6">
+                <el-card class="stat-card">
+                  <div class="stat-value">{{ checkinAnalysis.stats.total_hours.toFixed(1) }}</div>
+                  <div class="stat-label">总学习时长（小时）</div>
+                </el-card>
+              </el-col>
+              <el-col :span="6">
+                <el-card class="stat-card">
+                  <div class="stat-value">{{ checkinAnalysis.stats.checkin_rate.toFixed(1) }}%</div>
+                  <div class="stat-label">打卡率</div>
+                </el-card>
+              </el-col>
+              <el-col :span="6">
+                <el-card class="stat-card">
+                  <div class="stat-value">{{ checkinAnalysis.stats.streak_days }}</div>
+                  <div class="stat-label">最长连续打卡（天）</div>
+                </el-card>
+              </el-col>
+            </el-row>
+          </div>
+          
+          <!-- 洞察和建议 -->
+          <div class="insights-section">
+            <h3 class="section-title">AI洞察</h3>
+            <el-card class="insights-card">
+              <div v-for="(insight, index) in checkinAnalysis.insights" :key="index" class="insight-item">
+                {{ insight }}
+              </div>
+            </el-card>
+          </div>
+          
+          <div class="recommendations-section">
+            <h3 class="section-title">改进建议</h3>
+            <el-card class="recommendations-card">
+              <div v-for="(recommendation, index) in checkinAnalysis.recommendations" :key="index" class="recommendation-item">
+                {{ recommendation }}
+              </div>
+            </el-card>
+          </div>
+          
+          <!-- 异常分析 -->
+          <div v-if="checkinAnalysis.anomalies && checkinAnalysis.anomalies.length > 0" class="anomalies-section">
+            <h3 class="section-title">异常打卡情况</h3>
+            <el-card class="anomalies-card">
+              <el-table :data="checkinAnalysis.anomalies" style="width: 100%">
+                <el-table-column prop="date" label="日期" width="120">
+                  <template #default="scope">
+                    {{ new Date(scope.row.date).toLocaleDateString() }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="type" label="异常类型" width="120" />
+                <el-table-column prop="description" label="描述" />
+                <el-table-column prop="severity" label="严重程度" width="100">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.severity === 'high' ? 'danger' : 'warning'">
+                      {{ scope.row.severity === 'high' ? '高' : '中' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </div>
+          
+          <!-- AI总结 -->
+          <div class="summary-section">
+            <h3 class="section-title">AI总结</h3>
+            <el-card class="summary-card">
+              <div class="ai-summary-content">
+                {{ checkinAnalysis.ai_summary }}
+              </div>
+            </el-card>
+          </div>
+        </div>
+        <div v-else-if="analysisError" class="loading-analysis">
+          <el-alert
+            type="error"
+            :title="analysisError"
+            show-icon
+            class="error-alert"
+          />
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -208,12 +360,22 @@ const aiCoachResponse = ref(null)
 const coachError = ref('')
 const isLoading = ref(false)
 
+// AI打卡分析相关
+const analysisStartDate = ref(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+const analysisEndDate = ref(new Date())
+const analysisType = ref('comprehensive')
+const checkinAnalysis = ref(null)
+const analysisError = ref('')
+const isAnalysisLoading = ref(false)
+
 // 方法
 const fetchWeeklyReport = async () => {
   try {
     error.value = ''
+    // 将日期转换为ISO格式，只保留日期部分（YYYY-MM-DD）
+    const weekDate = weekStartDate.value ? new Date(weekStartDate.value).toISOString().split('T')[0] : null
     const response = await api.ai.getWeeklyReport({
-      week_date: weekStartDate.value
+      week_date: weekDate
     })
     weeklyReport.value = response.data.data
   } catch (err) {
@@ -226,18 +388,123 @@ const getLearningCoach = async () => {
   try {
     isLoading.value = true
     coachError.value = ''
-    const response = await api.ai.getLearningCoach(learningData.value)
-    // 将AI响应转换为HTML格式，保留换行和列表
-    let formattedResponse = response.data.data.ai_response
+    
+    // 使用 fetch API 直接处理流式响应
+    const response = await fetch('/api/ai/learning_coach', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(learningData.value)
+    })
+    
+    if (!response.ok) {
+      throw new Error('API请求失败')
+    }
+    
+    // 处理流式响应
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let fullResponse = ''
+    
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      fullResponse += chunk
+      // 可以在这里添加实时更新UI的逻辑
+    }
+    
+    // 格式化响应
+    let formattedResponse = fullResponse
       .replace(/\n/g, '<br>')
       .replace(/- (.*?)<br>/g, '<li>$1</li>')
       .replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>')
     aiCoachResponse.value = formattedResponse
   } catch (err) {
-    coachError.value = err.response?.data?.message || '获取学习指导失败，请稍后重试'
+    coachError.value = err.message || '获取学习指导失败，请稍后重试'
     console.error('获取学习指导失败:', err)
   } finally {
     isLoading.value = false
+  }
+}
+
+const testApiConnection = async () => {
+  try {
+    console.log('测试API连接开始...')
+    const token = localStorage.getItem('token')
+    console.log('Token存在:', !!token)
+    
+    // 测试一个简单的GET请求
+    const response = await api.users.getMe()
+    console.log('用户API测试成功:', response)
+    
+    // 如果用户API成功，再测试打卡分析API
+    const testRequest = {
+      start_date: '2024-01-01',
+      end_date: '2024-01-31',
+      analysis_type: 'comprehensive'
+    }
+    
+    console.log('测试打卡分析API，请求数据:', testRequest)
+    const analysisResponse = await api.ai.getCheckinAnalysis(testRequest)
+    console.log('打卡分析API测试成功:', analysisResponse)
+    
+    alert('API连接测试成功！')
+  } catch (err) {
+    console.error('API测试失败:', err)
+    console.error('错误详情:', err.response || err)
+    alert(`API测试失败: ${err.message || '未知错误'}`)
+  }
+}
+
+const getCheckinAnalysis = async () => {
+  try {
+    isAnalysisLoading.value = true
+    analysisError.value = ''
+    
+    // 检查认证状态
+    const token = localStorage.getItem('token')
+    console.log('当前token:', token)
+    if (!token) {
+      analysisError.value = '请先登录系统'
+      return
+    }
+    
+    // 转换日期格式
+    const startDate = analysisStartDate.value ? new Date(analysisStartDate.value).toISOString().split('T')[0] : null
+    const endDate = analysisEndDate.value ? new Date(analysisEndDate.value).toISOString().split('T')[0] : null
+    
+    const requestData = {
+      start_date: startDate,
+      end_date: endDate,
+      analysis_type: analysisType.value
+    }
+    
+    console.log('请求数据:', requestData)
+    
+    const response = await api.ai.getCheckinAnalysis(requestData)
+    console.log('打卡分析响应:', response)
+    checkinAnalysis.value = response.data.data
+  } catch (err) {
+    console.error('打卡分析失败详情:', err)
+    console.error('错误响应:', err.response)
+    console.error('错误数据:', err.response?.data)
+    
+    if (err.response?.status === 401) {
+      analysisError.value = '登录已过期，请重新登录'
+      // 清除过期的token
+      localStorage.removeItem('token')
+      // 可以添加自动跳转到登录页面的逻辑
+      setTimeout(() => {
+        window.location.href = '/auth/login'
+      }, 2000)
+    } else {
+      analysisError.value = err.response?.data?.message || err.message || '打卡分析失败，请稍后重试'
+    }
+  } finally {
+    isAnalysisLoading.value = false
   }
 }
 
@@ -466,5 +733,79 @@ onMounted(async () => {
 
 .ai-content br {
   margin: 5px 0;
+}
+
+/* AI打卡分析样式 */
+.ai-checkin-analysis-card {
+  margin-top: 30px;
+}
+
+.analysis-controls {
+  margin-bottom: 30px;
+}
+
+.analysis-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.stats-overview {
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.stat-label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.insights-section,
+.recommendations-section,
+.anomalies-section,
+.summary-section {
+  margin-bottom: 30px;
+}
+
+.insights-card,
+.recommendations-card,
+.anomalies-card,
+.summary-card {
+  min-height: 100px;
+}
+
+.insight-item,
+.recommendation-item {
+  margin-bottom: 10px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-left: 4px solid #667eea;
+  border-radius: 4px;
+}
+
+.recommendation-item {
+  border-left-color: #28a745;
+}
+
+.ai-summary-content {
+  line-height: 1.8;
+  font-size: 16px;
+  color: #333;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
 }
 </style>

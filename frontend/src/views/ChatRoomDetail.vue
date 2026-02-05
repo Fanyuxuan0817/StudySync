@@ -1,48 +1,55 @@
 <template>
   <div class="chat-room-detail">
-    <div class="detail-header">
-      <el-button type="text" @click="goBack" class="back-button">
-        <el-icon><ArrowLeft /></el-icon>
-        返回
-      </el-button>
-      <div class="room-info">
-        <div class="room-avatar">
-          <el-avatar :size="60" :src="roomInfo.avatar_url || defaultAvatar">
-            {{ roomInfo.name?.charAt(0) }}
-          </el-avatar>
-        </div>
-        <div class="room-details">
-          <h1 class="room-name">{{ roomInfo.name }}</h1>
-          <p class="room-id">群聊ID: {{ formatChatId(roomInfo.chat_id) }}</p>
-          <div class="room-stats">
-            <el-tag size="small" :type="roomInfo.is_public ? 'success' : 'warning'">
-              {{ roomInfo.is_public ? '公开群聊' : '私密群聊' }}
-            </el-tag>
-            <span class="member-count">
-              <el-icon><User /></el-icon>
-              {{ roomInfo.current_members }}/{{ roomInfo.max_members }} 成员
-            </span>
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-overlay">
+      <el-spinner size="60" />
+      <p class="loading-text">加载中，请稍候...</p>
+    </div>
+    
+    <div v-else>
+      <div class="detail-header">
+        <el-button type="text" @click="goBack" class="back-button">
+          <el-icon><ArrowLeft /></el-icon>
+          返回
+        </el-button>
+        <div class="room-info">
+          <div class="room-avatar">
+            <el-avatar :size="60" :src="roomInfo.avatar_url || defaultAvatar">
+              {{ roomInfo.name?.charAt(0) }}
+            </el-avatar>
+          </div>
+          <div class="room-details">
+            <h1 class="room-name">{{ roomInfo.name }}</h1>
+            <p class="room-id">群聊ID: {{ formatChatId(roomInfo.chat_id) }}</p>
+            <div class="room-stats">
+              <el-tag size="small" :type="roomInfo.is_public ? 'success' : 'warning'">
+                {{ roomInfo.is_public ? '公开群聊' : '私密群聊' }}
+              </el-tag>
+              <span class="member-count">
+                <el-icon><User /></el-icon>
+                {{ roomInfo.current_members }}/{{ roomInfo.max_members }} 成员
+              </span>
+            </div>
           </div>
         </div>
+        <div class="header-actions">
+          <el-button 
+            v-if="!isMember" 
+            type="primary" 
+            @click="showJoinDialog = true"
+            :disabled="roomInfo.current_members >= roomInfo.max_members"
+          >
+            申请加入
+          </el-button>
+          <el-button 
+            v-else 
+            type="success" 
+            @click="enterChatRoom"
+          >
+            进入群聊
+          </el-button>
+        </div>
       </div>
-      <div class="header-actions">
-        <el-button 
-          v-if="!isMember" 
-          type="primary" 
-          @click="showJoinDialog = true"
-          :disabled="roomInfo.current_members >= roomInfo.max_members"
-        >
-          申请加入
-        </el-button>
-        <el-button 
-          v-else 
-          type="success" 
-          @click="enterChatRoom"
-        >
-          进入群聊
-        </el-button>
-      </div>
-    </div>
 
     <el-tabs v-model="activeTab" class="detail-tabs">
       <!-- 群聊信息 -->
@@ -203,6 +210,7 @@
         </el-button>
       </template>
     </el-dialog>
+    </div>
   </div>
 </template>
 
@@ -716,6 +724,27 @@ onMounted(async () => {
 
 .join-dialog-content {
   padding: 10px 0;
+}
+
+/* 加载状态样式 */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 16px;
+  color: #606266;
 }
 
 @media (max-width: 768px) {

@@ -38,6 +38,164 @@
         </el-card>
       </div>
       
+      <!-- AI学习评估 -->
+      <div class="ai-evaluation-card">
+        <h2 class="card-title">AI学习评估</h2>
+        <el-card :body-style="{ padding: '20px' }" class="ai-card-content">
+          <div v-if="isAiAnalyzing" class="ai-loading">
+            <div class="loading-container">
+              <el-skeleton :rows="10" animated />
+              <div class="loading-text">
+                <el-icon class="loading-icon"><Loading /></el-icon>
+                <span>AI正在分析您的学习数据...</span>
+              </div>
+              <div class="loading-steps">
+                <el-progress :percentage="loadingProgress" :stroke-width="8" status="success" />
+                <span class="loading-step-text">{{ loadingStep }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="aiEvaluation" class="ai-evaluation-content">
+            <!-- 学习评分 -->
+            <div class="ai-score-section">
+              <h3 class="ai-section-title">学习评分</h3>
+              <div class="ai-score-card">
+                <div class="ai-total-score">
+                  <el-progress
+                    type="dashboard"
+                    :percentage="aiEvaluation.score.total"
+                    :color="getAiScoreColor(aiEvaluation.score.total)"
+                    :format="formatAiScore"
+                    :stroke-width="15"
+                    :width="120"
+                  />
+                </div>
+                <div class="ai-score-details">
+                  <div class="ai-score-item">
+                    <span class="ai-score-label">打卡频率</span>
+                    <el-progress
+                      :percentage="aiEvaluation.score.frequency"
+                      :color="getAiScoreColor(aiEvaluation.score.frequency)"
+                      :show-text="false"
+                      :stroke-width="8"
+                    />
+                    <span class="ai-score-value">{{ aiEvaluation.score.frequency }}%</span>
+                  </div>
+                  <div class="ai-score-item">
+                    <span class="ai-score-label">学习时长</span>
+                    <el-progress
+                      :percentage="aiEvaluation.score.duration"
+                      :color="getAiScoreColor(aiEvaluation.score.duration)"
+                      :show-text="false"
+                      :stroke-width="8"
+                    />
+                    <span class="ai-score-value">{{ aiEvaluation.score.duration }}%</span>
+                  </div>
+                  <div class="ai-score-item">
+                    <span class="ai-score-label">学习稳定性</span>
+                    <el-progress
+                      :percentage="aiEvaluation.score.stability"
+                      :color="getAiScoreColor(aiEvaluation.score.stability)"
+                      :show-text="false"
+                      :stroke-width="8"
+                    />
+                    <span class="ai-score-value">{{ aiEvaluation.score.stability }}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 学习总结 -->
+            <div class="ai-summary-section">
+              <h3 class="ai-section-title">学习总结</h3>
+              <el-card :body-style="{ padding: '15px' }" class="ai-summary-card">
+                <div class="ai-summary-item">
+                  <span class="ai-summary-label">打卡频率：</span>
+                  <span class="ai-summary-value">{{ aiEvaluation.summary.checkin_frequency }}</span>
+                </div>
+                <div class="ai-summary-item">
+                  <span class="ai-summary-label">学习趋势：</span>
+                  <span class="ai-summary-value">{{ aiEvaluation.summary.learning_trend }}</span>
+                </div>
+                <div class="ai-summary-item">
+                  <span class="ai-summary-label">稳定性：</span>
+                  <span class="ai-summary-value">{{ aiEvaluation.summary.stability_level }}</span>
+                </div>
+              </el-card>
+            </div>
+            
+            <!-- 问题与建议 -->
+            <div class="ai-issues-suggestions">
+              <div class="ai-issues-section">
+                <h3 class="ai-section-title">存在问题</h3>
+                <el-card :body-style="{ padding: '15px' }" class="ai-issues-card">
+                  <ul v-if="aiEvaluation.issues && aiEvaluation.issues.length > 0">
+                    <li v-for="(issue, index) in aiEvaluation.issues" :key="index" class="ai-issue-item">
+                      {{ issue }}
+                    </li>
+                  </ul>
+                  <p v-else class="ai-no-issues">暂无问题</p>
+                </el-card>
+              </div>
+              
+              <div class="ai-suggestions-section">
+                <h3 class="ai-section-title">改进建议</h3>
+                <el-card :body-style="{ padding: '15px' }" class="ai-suggestions-card">
+                  <ul v-if="aiEvaluation.suggestions && aiEvaluation.suggestions.length > 0">
+                    <li v-for="(suggestion, index) in aiEvaluation.suggestions" :key="index" class="ai-suggestion-item">
+                      {{ suggestion }}
+                    </li>
+                  </ul>
+                  <p v-else class="ai-no-suggestions">暂无建议</p>
+                </el-card>
+              </div>
+            </div>
+            
+            <!-- 推荐学习时长 -->
+            <div class="ai-recommended-section">
+              <h3 class="ai-section-title">推荐学习时长</h3>
+              <el-card :body-style="{ padding: '15px' }" class="ai-recommended-card">
+                <div class="ai-recommended-hours">
+                  <span class="ai-hours-label">建议每日学习时长：</span>
+                  <span class="ai-hours-value">{{ aiEvaluation.recommended_hours }} 小时</span>
+                </div>
+              </el-card>
+            </div>
+            
+            <!-- 重新分析按钮 -->
+            <div class="ai-reanalyze-section">
+              <el-button 
+                type="primary" 
+                @click="fetchAiEvaluation" 
+                class="reanalyze-btn"
+                :disabled="isAiAnalyzing"
+              >
+                <el-icon v-if="isAiAnalyzing"><Loading /></el-icon>
+                {{ isAiAnalyzing ? '分析中...' : '重新分析' }}
+              </el-button>
+            </div>
+          </div>
+          <div v-else class="ai-no-data">
+            <el-empty description="点击下方按钮开始AI学习分析" />
+            <el-button 
+              type="primary" 
+              @click="fetchAiEvaluation" 
+              class="analyze-btn"
+              :disabled="isAiAnalyzing"
+            >
+              开始学习分析
+            </el-button>
+          </div>
+          <el-alert
+            v-if="aiError"
+            type="error"
+            :title="aiError"
+            show-icon
+            class="ai-error-alert"
+          ></el-alert>
+        </el-card>
+      </div>
+      
       <!-- 学习计划 -->
       <div class="plans-card">
         <h2 class="card-title">我的学习计划</h2>
@@ -169,6 +327,8 @@ import { useAuthStore } from '../store/modules/auth'
 import { useUserStore } from '../store/modules/user'
 import * as echarts from 'echarts'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
+import api from '../api'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -177,6 +337,22 @@ const weeklyChartRef = ref(null)
 const weeklyChart = ref(null)
 const createPlanDialogVisible = ref(false)
 const planFormRef = ref(null)
+
+// AI评估相关状态
+const aiEvaluation = ref(null)
+const isAiAnalyzing = ref(false)
+const aiError = ref('')
+const loadingProgress = ref(0)
+const loadingStep = ref('准备分析数据...')
+
+// 性能优化：使用防抖函数
+const debounce = (func, delay) => {
+  let timeoutId
+  return (...args) => {
+    clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => func.apply(null, args), delay)
+  }
+}
 
 // 表单数据
 const planForm = ref({
@@ -276,6 +452,199 @@ const handleDeletePlan = async (planId) => {
 
 const formatProgress = (percentage) => {
   return `${percentage}%`
+}
+
+// AI评估相关方法
+const fetchAiEvaluation = async () => {
+  try {
+    isAiAnalyzing.value = true
+    aiError.value = ''
+    loadingProgress.value = 0
+    loadingStep.value = '准备分析数据...'
+    
+    // 检查认证状态
+    const token = localStorage.getItem('token')
+    if (!token) {
+      aiError.value = '请先登录系统'
+      isAiAnalyzing.value = false
+      return
+    }
+    
+    // 获取本周开始日期
+    const now = new Date()
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - now.getDay())
+    const weekStartDate = weekStart.toISOString().split('T')[0]
+    
+    // 模拟进度更新
+    const updateProgress = (progress, step) => {
+      loadingProgress.value = progress
+      loadingStep.value = step
+    }
+    
+    // 尝试使用流式API
+    try {
+      updateProgress(20, '获取打卡数据...')
+      
+      // 使用fetch API直接处理流式响应
+      const response = await fetch(`/api/ai/weekly_report/stream?week_date=${weekStartDate}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('API请求失败')
+      }
+      
+      updateProgress(40, '解析打卡数据...')
+      
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullAnalysis = ''
+      
+      // 初始化AI评估数据
+      aiEvaluation.value = {
+        week_start: weekStart,
+        week_end: new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000),
+        generated_at: new Date(),
+        score: {
+          total: 0,
+          frequency: 0,
+          duration: 0,
+          stability: 0
+        },
+        summary: {
+          checkin_frequency: '分析中...',
+          learning_trend: '分析中...',
+          stability_level: '分析中...'
+        },
+        issues: [],
+        suggestions: [],
+        recommended_hours: 0
+      }
+      
+      updateProgress(60, 'AI正在分析数据...')
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        
+        // 处理每一行JSON数据
+        const lines = buffer.split('\n')
+        buffer = lines.pop() // 保存最后一行不完整的数据
+        
+        for (const line of lines) {
+          if (!line.trim()) continue
+          
+          try {
+            const data = JSON.parse(line)
+            
+            switch (data.type) {
+              case 'basic':
+                // 更新基本数据
+                aiEvaluation.value.score = data.data.score
+                updateProgress(70, '计算学习评分...')
+                break
+              case 'analysis':
+                // 累积分析内容
+                fullAnalysis += data.data.content
+                // 简单解析分析内容，更新UI
+                updateAiEvaluationFromAnalysis(fullAnalysis)
+                updateProgress(85, '生成分析报告...')
+                break
+              case 'complete':
+                // 分析完成
+                updateProgress(100, '分析完成')
+                break
+              case 'error':
+                // 分析错误
+                aiError.value = data.data.message
+                break
+            }
+          } catch (parseError) {
+            console.error('解析流式数据失败:', parseError)
+          }
+        }
+      }
+    } catch (streamError) {
+      console.error('流式API失败，使用传统API:', streamError)
+      updateProgress(70, '使用传统API获取数据...')
+      // 回退到传统API
+      const response = await api.ai.getWeeklyReport({ week_date: weekStartDate })
+      aiEvaluation.value = response.data.data
+      updateProgress(100, '分析完成')
+    }
+  } catch (err) {
+    console.error('获取AI评估失败:', err)
+    aiError.value = err.response?.data?.message || '获取AI评估失败，请稍后重试'
+  } finally {
+    isAiAnalyzing.value = false
+  }
+}
+
+// 使用防抖优化UI更新
+const updateAiEvaluationFromAnalysis = debounce((analysis) => {
+  // 简单解析分析内容，更新UI
+  // 这里可以根据实际的AI输出格式进行更复杂的解析
+  if (analysis.includes('存在问题')) {
+    const issuesMatch = analysis.match(/存在问题[\s\S]*?(?=改进建议|$)/)
+    if (issuesMatch) {
+      const issuesText = issuesMatch[0]
+      const issues = issuesText
+        .split('\n')
+        .filter(line => line.trim() && !line.includes('存在问题'))
+        .map(line => line.trim().replace(/^[•-\s]+/, ''))
+      if (issues.length > 0) {
+        aiEvaluation.value.issues = issues
+      }
+    }
+  }
+  
+  if (analysis.includes('改进建议')) {
+    const suggestionsMatch = analysis.match(/改进建议[\s\S]*?(?=推荐学习时长|$)/)
+    if (suggestionsMatch) {
+      const suggestionsText = suggestionsMatch[0]
+      const suggestions = suggestionsText
+        .split('\n')
+        .filter(line => line.trim() && !line.includes('改进建议'))
+        .map(line => line.trim().replace(/^[•-\s]+/, ''))
+      if (suggestions.length > 0) {
+        aiEvaluation.value.suggestions = suggestions
+      }
+    }
+  }
+  
+  if (analysis.includes('推荐学习时长')) {
+    const hoursMatch = analysis.match(/推荐学习时长.*?(\d+(\.\d+)?)小时/)
+    if (hoursMatch) {
+      aiEvaluation.value.recommended_hours = parseFloat(hoursMatch[1])
+    }
+  }
+  
+  // 更新学习总结
+  aiEvaluation.value.summary = {
+    checkin_frequency: '分析完成',
+    learning_trend: '分析完成',
+    stability_level: '分析完成'
+  }
+}, 300) // 300ms防抖，减少UI更新频率
+
+const getAiScoreColor = (score) => {
+  if (score >= 80) {
+    return '#67C23A'
+  } else if (score >= 60) {
+    return '#E6A23C'
+  } else {
+    return '#F56C6C'
+  }
+}
+
+const formatAiScore = (percentage) => {
+  return `${percentage}分`
 }
 
 // 初始化图表
@@ -455,6 +824,215 @@ onMounted(async () => {
   min-height: 300px;
 }
 
+/* AI学习评估样式 */
+.ai-evaluation-card {
+  margin-top: 30px;
+}
+
+.ai-card-content {
+  min-height: 400px;
+}
+
+.ai-loading {
+  padding: 20px 0;
+}
+
+.loading-container {
+  position: relative;
+}
+
+.loading-text {
+  text-align: center;
+  margin-top: 20px;
+  color: #666;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.loading-icon {
+  animation: rotate 1.5s linear infinite;
+}
+
+.loading-steps {
+  margin-top: 20px;
+}
+
+.loading-step-text {
+  text-align: center;
+  margin-top: 10px;
+  color: #909399;
+  font-size: 14px;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-evaluation-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ai-section-title {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 15px;
+  font-weight: 500;
+}
+
+.ai-score-section {
+  margin-bottom: 20px;
+}
+
+.ai-score-card {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ai-total-score {
+  flex-shrink: 0;
+}
+
+.ai-score-details {
+  flex: 1;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.ai-score-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ai-score-label {
+  font-size: 14px;
+  color: #666;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-score-value {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.ai-summary-section,
+.ai-recommended-section {
+  margin-top: 20px;
+}
+
+.ai-summary-card,
+.ai-issues-card,
+.ai-suggestions-card,
+.ai-recommended-card {
+  min-height: 100px;
+}
+
+.ai-summary-item {
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.ai-summary-label {
+  font-weight: 500;
+  color: #333;
+  margin-right: 10px;
+}
+
+.ai-summary-value {
+  color: #666;
+}
+
+.ai-issues-suggestions {
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.ai-issues-section,
+.ai-suggestions-section {
+  flex: 1;
+  min-width: 300px;
+}
+
+.ai-issue-item,
+.ai-suggestion-item {
+  margin-bottom: 10px;
+  padding-left: 20px;
+  position: relative;
+}
+
+.ai-issue-item::before,
+.ai-suggestion-item::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #666;
+}
+
+.ai-no-issues,
+.ai-no-suggestions {
+  text-align: center;
+  color: #999;
+  padding: 20px 0;
+}
+
+.ai-recommended-hours {
+  text-align: center;
+  font-size: 16px;
+}
+
+.ai-hours-label {
+  color: #666;
+  margin-right: 10px;
+}
+
+.ai-hours-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #409EFF;
+}
+
+.ai-no-data {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.ai-error-alert {
+  margin-top: 20px;
+}
+
+.analyze-btn {
+  margin-top: 20px;
+}
+
+.ai-reanalyze-section {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.reanalyze-btn {
+  font-size: 14px;
+  padding: 10px 20px;
+}
+
 @media (max-width: 768px) {
   .home-header {
     flex-direction: column;
@@ -464,6 +1042,15 @@ onMounted(async () => {
   
   .checkin-btn {
     align-self: flex-start;
+  }
+  
+  .ai-score-card {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .ai-issues-suggestions {
+    flex-direction: column;
   }
 }
 </style>
