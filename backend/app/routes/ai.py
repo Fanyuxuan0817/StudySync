@@ -75,7 +75,7 @@ async def get_weekly_report(
             },
             "issues": json.loads(report.issues) if isinstance(report.issues, str) else [],
             "suggestions": json.loads(report.suggestions) if isinstance(report.suggestions, str) else [],
-            "recommended_hours": 2.0
+            "recommended_hours": report.recommended_hours / 60 if report.recommended_hours else 1.5
         }
     )
 
@@ -261,12 +261,26 @@ async def generate_report(
         issues.append("打卡频率不稳定")
         suggestions.append("建议制定固定学习时间，培养学习习惯")
     
+    # 计算建议学习时长（基于用户实际表现动态调整）
+    # 基础建议：90分钟(1.5小时)，根据表现调整
+    if total_hours == 0:
+        recommended_hours = 90  # 无记录时建议从90分钟开始
+    elif checkin_rate >= 80 and total_hours >= 15:
+        recommended_hours = 180  # 表现优秀：3小时
+    elif checkin_rate >= 60 and total_hours >= 10:
+        recommended_hours = 150  # 表现良好：2.5小时
+    elif checkin_rate >= 40:
+        recommended_hours = 120  # 表现一般：2小时
+    else:
+        recommended_hours = 90  # 需要改进：1.5小时
+    
     if existing_report:
         # 更新现有报告
         existing_report.score = score
         existing_report.summary = "本周学习情况分析"
         existing_report.issues = json.dumps(issues, ensure_ascii=False)
         existing_report.suggestions = json.dumps(suggestions, ensure_ascii=False)
+        existing_report.recommended_hours = recommended_hours
         existing_report.updated_at = datetime.now()
         db.commit()
     else:
@@ -278,7 +292,8 @@ async def generate_report(
             score=score,
             summary="本周学习情况分析",
             issues=json.dumps(issues, ensure_ascii=False),
-            suggestions=json.dumps(suggestions, ensure_ascii=False)
+            suggestions=json.dumps(suggestions, ensure_ascii=False),
+            recommended_hours=recommended_hours
         )
         db.add(new_report)
         db.commit()

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import date, datetime
 
@@ -44,7 +44,7 @@ class PlanCreate(BaseModel):
     start_date: date
     end_date: Optional[date] = None
 
-    @validator('daily_goal_hours')
+    @field_validator('daily_goal_hours')
     def convert_to_minutes(cls, v):
         return int(v * 60)
 
@@ -56,7 +56,7 @@ class PlanUpdate(BaseModel):
     end_date: Optional[date] = None
     status: Optional[str] = None
 
-    @validator('daily_goal_hours')
+    @field_validator('daily_goal_hours')
     def convert_to_minutes(cls, v):
         if v is not None:
             return int(v * 60)
@@ -99,7 +99,7 @@ class CheckinCreate(BaseModel):
     content: str
     checkin_date: Optional[date] = None
 
-    @validator('hours')
+    @field_validator('hours')
     def convert_to_minutes(cls, v):
         return int(v * 60)
 

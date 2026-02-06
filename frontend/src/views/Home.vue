@@ -215,7 +215,7 @@
             </div>
             
             <!-- 推荐学习时长 -->
-            <div class="recommendation-section">
+            <!-- <div class="recommendation-section">
               <div class="recommendation-card">
                 <span class="rec-icon">⏰</span>
                 <div class="rec-content">
@@ -223,7 +223,7 @@
                   <span class="rec-value">{{ aiEvaluation.recommended_hours }} 小时</span>
                 </div>
               </div>
-            </div>
+            </div> -->
             
             <!-- 重新分析按钮 -->
             <div class="reanalyze-section">

@@ -116,6 +116,7 @@ class AIWeeklyReport(Base):
     summary = Column(Text, nullable=True)
     issues = Column(Text, nullable=True)
     suggestions = Column(Text, nullable=True)
+    recommended_hours = Column(Integer, nullable=False, default=120)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
